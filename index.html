@@ -184,6 +184,65 @@
   tr.hour-boundary td.cell {
     border-top: 1px solid var(--border);
   }
+  .viewswitch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .viewswitch .seg {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .viewswitch .seg.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  #manualView {
+    width: max(300px, calc(50vw + 32px));
+  }
+  .manual-day {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .manual-day:last-child { border-bottom: none; }
+  .manual-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+  .manual-range {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    color: var(--muted);
+  }
+  .manual-range input[type="time"] {
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  .manual-range input.invalid { border-color: var(--danger); }
+  button.icon {
+    padding: 4px 10px;
+    font-size: 1rem;
+    line-height: 1;
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--border);
+  }
   .legend {
     display: flex;
     align-items: center;
@@ -332,6 +391,12 @@
     <p class="sub">Click a cell, or click and drag, to mark the hours you worked. Click again to unmark. Hit Save when you're done.</p>
 
     <div class="card week">
+      <div class="viewswitch" role="group" aria-label="View">
+        View:
+        <button type="button" class="seg active" data-view="schedule" aria-pressed="true">Schedule</button>
+        <button type="button" class="seg" data-view="manual" aria-pressed="false">Manual</button>
+      </div>
+      <div id="manualView" style="display:none;"></div>
       <div class="grid-scroll">
         <table id="grid"></table>
       </div>
@@ -372,6 +437,7 @@
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   var DAYS = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
+  var DAY_NAMES = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
   var START_HOUR = 0;   // midnight
   var END_HOUR = 24;    // up to midnight
   var SLOTS_PER_HOUR = 4; // 15-minute increments
@@ -513,7 +579,143 @@
       var key = cellKey(td.dataset.day, td.dataset.slot);
       td.classList.toggle("selected", !!selected[key]);
     });
+    renderManual();
   }
+
+  // ---------------- Manual view ----------------
+  // Edits the same `selected` map as the grid, so both views stay in sync.
+
+  var manualView = document.getElementById("manualView");
+  var pendingRows = {}; // dayIdx -> number of blank ranges added with "+"
+
+  function slotToTime(slot) {
+    var minutes = (slot * (60 / SLOTS_PER_HOUR)) % (24 * 60);
+    return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+  }
+
+  function timeToSlot(value) {
+    var parts = value.split(":");
+    return Math.round((parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)) / (60 / SLOTS_PER_HOUR));
+  }
+
+  function setRange(dayIdx, start, end, on) {
+    for (var s = start; s < end; s++) selected[cellKey(dayIdx, s)] = on;
+  }
+
+  function changed() {
+    applySelectedToGrid();
+    updateSummary();
+  }
+
+  // start/end are slot numbers (end exclusive), or null for a blank row.
+  function rangeRow(dayIdx, start, end) {
+    var row = document.createElement("div");
+    row.className = "manual-range";
+    var startIn = document.createElement("input");
+    var endIn = document.createElement("input");
+    [startIn, endIn].forEach(function (input) {
+      input.type = "time";
+      input.step = 60 * (60 / SLOTS_PER_HOUR);
+      input.addEventListener("input", function () {
+        startIn.classList.remove("invalid");
+        endIn.classList.remove("invalid");
+      });
+    });
+    startIn.setAttribute("aria-label", DAY_NAMES[dayIdx] + " start time");
+    endIn.setAttribute("aria-label", DAY_NAMES[dayIdx] + " end time");
+    if (start !== null) {
+      startIn.value = slotToTime(start);
+      endIn.value = slotToTime(end);
+    }
+    var removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "icon";
+    removeBtn.textContent = "\u00d7";
+    removeBtn.setAttribute("aria-label", "Remove time range");
+    removeBtn.addEventListener("click", function () {
+      if (start === null) pendingRows[dayIdx]--;
+      else setRange(dayIdx, start, end, false);
+      changed();
+    });
+
+    function commit() {
+      if (!startIn.value || !endIn.value) return;
+      var s = timeToSlot(startIn.value);
+      var e = timeToSlot(endIn.value);
+      if (e === 0) e = 24 * SLOTS_PER_HOUR; // an end of 12:00 AM means midnight
+      if (s === start && e === end) return;
+      if (e <= s) {
+        startIn.classList.add("invalid");
+        endIn.classList.add("invalid");
+        return;
+      }
+      if (start === null) pendingRows[dayIdx]--;
+      else setRange(dayIdx, start, end, false);
+      setRange(dayIdx, s, e, true);
+      changed();
+    }
+    // Commit once focus leaves the row, so typing doesn't redraw mid-edit.
+    row.addEventListener("focusout", function (e) {
+      if (!row.contains(e.relatedTarget)) commit();
+    });
+    row.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") commit();
+    });
+
+    row.appendChild(startIn);
+    row.appendChild(document.createTextNode("\u2013"));
+    row.appendChild(endIn);
+    row.appendChild(removeBtn);
+    return row;
+  }
+
+  function renderManual() {
+    manualView.innerHTML = "";
+    DAYS.forEach(function (d, dayIdx) {
+      var dayEl = document.createElement("div");
+      dayEl.className = "manual-day";
+      var head = document.createElement("div");
+      head.className = "manual-head";
+      var name = document.createElement("span");
+      name.textContent = DAY_NAMES[dayIdx] + " " + formatDateShort(weekDates[dayIdx]);
+      var addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "icon";
+      addBtn.textContent = "+";
+      addBtn.setAttribute("aria-label", "Add time range for " + DAY_NAMES[dayIdx]);
+      addBtn.addEventListener("click", function () {
+        pendingRows[dayIdx] = (pendingRows[dayIdx] || 0) + 1;
+        renderManual();
+      });
+      head.appendChild(name);
+      head.appendChild(addBtn);
+      dayEl.appendChild(head);
+
+      var daySlots = slots.filter(function (s) { return selected[cellKey(dayIdx, s)]; });
+      mergeRanges(daySlots).forEach(function (r) {
+        dayEl.appendChild(rangeRow(dayIdx, r[0], r[1] + 1));
+      });
+      for (var i = 0; i < (pendingRows[dayIdx] || 0); i++) {
+        dayEl.appendChild(rangeRow(dayIdx, null, null));
+      }
+      manualView.appendChild(dayEl);
+    });
+  }
+
+  document.querySelectorAll(".viewswitch .seg").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var manual = btn.dataset.view === "manual";
+      document.querySelectorAll(".viewswitch .seg").forEach(function (b) {
+        var on = b === btn;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on);
+      });
+      manualView.style.display = manual ? "block" : "none";
+      document.querySelector(".grid-scroll").style.display = manual ? "none" : "block";
+      document.querySelector(".legend").style.display = manual ? "none" : "flex";
+      if (manual) renderManual();
+    });
+  });
 
   document.getElementById("clearBtn").addEventListener("click", function () {
     selected = {};
