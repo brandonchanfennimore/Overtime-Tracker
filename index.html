@@ -126,7 +126,9 @@
   }
   table {
     border-collapse: collapse;
-    width: 100%;
+    /* Day columns at half the full-width size; the 64px hour column stays fixed. */
+    width: calc(50% + 32px);
+    margin: 0 auto;
     user-select: none;
     touch-action: none;
   }
