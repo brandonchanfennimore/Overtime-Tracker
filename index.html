@@ -50,6 +50,7 @@
     --danger: #f87171;
   }
   * { box-sizing: border-box; }
+  html { overflow-x: clip; }
   body {
     margin: 0;
     background: var(--bg);
@@ -110,24 +111,22 @@
     font-size: 0.95rem;
     margin-bottom: 12px;
   }
-  .grid-scroll {
-    overflow-x: auto;
-    overflow-y: auto;
-    max-height: 62vh;
-    position: relative;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+  /* Week grid breaks out of .wrap to span the full viewport width. */
+  .card.week {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding: 0 0 18px;
   }
-  .scroll-hint {
-    display: none;
-    font-size: 0.78rem;
-    color: var(--muted);
-    margin: 8px 0 0;
+  .card.week > :not(.grid-scroll) {
+    padding-left: 16px;
+    padding-right: 16px;
   }
   table {
     border-collapse: collapse;
     width: 100%;
-    min-width: 640px;
     user-select: none;
     touch-action: none;
   }
@@ -166,6 +165,7 @@
     text-align: right;
     padding-right: 8px;
     white-space: nowrap;
+    line-height: 0;
     border: none;
     position: sticky;
     left: 0;
@@ -173,8 +173,8 @@
     z-index: 2;
   }
   td.cell {
-    width: 60px;
-    height: 9px;
+    /* All 24 hours (96 rows) fit in one screen height, minus the header row. */
+    height: max(5px, calc((100vh - 72px) / 96));
     background: var(--cell-empty);
     border: 1px solid var(--border);
     border-top: none;
@@ -190,9 +190,6 @@
   }
   tr.hour-boundary td.cell {
     border-top: 1px solid var(--border);
-  }
-  tr.hour-boundary td.hourlabel {
-    padding-top: 3px;
   }
   .legend {
     display: flex;
@@ -311,11 +308,8 @@
     input[type="text"], input[type="email"], input[type="password"] { max-width: 100%; font-size: 1rem; padding: 10px 12px; }
     .btnrow { flex-direction: column; }
     .btnrow button { width: 100%; padding: 12px; font-size: 1rem; }
-    table { min-width: 520px; }
     th { font-size: 0.72rem; }
     td.hourlabel { font-size: 0.68rem; }
-    td.cell { width: 44px; height: 11px; }
-    .scroll-hint { display: block; }
     .summary-day, .summary-total { font-size: 0.88rem; }
   }
 </style>
@@ -344,11 +338,10 @@
     </div>
     <p class="sub">Click a cell, or click and drag, to mark the hours you worked. Click again to unmark. Hit Save when you're done.</p>
 
-    <div class="card">
+    <div class="card week">
       <div class="grid-scroll">
         <table id="grid"></table>
       </div>
-      <p class="scroll-hint">Scroll sideways to see all days &rarr;</p>
       <div class="legend">
         <span class="swatch on"></span> Marked as worked
       </div>
@@ -386,7 +379,7 @@
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   var DAYS = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
-  var START_HOUR = 6;   // 6 AM
+  var START_HOUR = 0;   // midnight
   var END_HOUR = 24;    // up to midnight
   var SLOTS_PER_HOUR = 4; // 15-minute increments
   var slots = [];
