@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overtime Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f9;
+    --card: #ffffff;
+    --border: #e1e2e6;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --accent: #4f46e5;
+    --accent-light: #c7d2fe;
+    --cell-empty: #ffffff;
+    --cell-hover: #eef0ff;
+    --cell-selected: #4f46e5;
+    --danger: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161c;
+      --card: #1c1f28;
+      --border: #2b2f3a;
+      --text: #e7e9ee;
+      --muted: #9aa0ab;
+      --accent: #818cf8;
+      --accent-light: #363b57;
+      --cell-empty: #1c1f28;
+      --cell-hover: #2a2f45;
+      --cell-selected: #818cf8;
+      --danger: #f87171;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161c;
+    --card: #1c1f28;
+    --border: #2b2f3a;
+    --text: #e7e9ee;
+    --muted: #9aa0ab;
+    --accent: #818cf8;
+    --accent-light: #363b57;
+    --cell-empty: #1c1f28;
+    --cell-hover: #2a2f45;
+    --cell-selected: #818cf8;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 24px 16px 60px;
+  }
+  .wrap {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+  }
+  h2 {
+    font-size: 1.05rem;
+    margin: 0 0 12px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 20px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .topbar .who {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 6px;
+  }
+  input[type="text"], input[type="email"], input[type="password"] {
+    width: 100%;
+    max-width: 280px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+  }
+  .grid-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 62vh;
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .scroll-hint {
+    display: none;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin: 8px 0 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 640px;
+    user-select: none;
+    touch-action: none;
+  }
+  th {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 6px 4px;
+    text-align: center;
+  }
+  th .date-sub {
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--muted);
+    opacity: 0.8;
+  }
+  th.hourcol {
+    width: 64px;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--card);
+    z-index: 3;
+  }
+  th.hourcol {
+    position: sticky;
+    left: 0;
+    top: 0;
+    z-index: 4;
+    background: var(--card);
+  }
+  td.hourlabel {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: right;
+    padding-right: 8px;
+    white-space: nowrap;
+    border: none;
+    position: sticky;
+    left: 0;
+    background: var(--card);
+    z-index: 2;
+  }
+  td.cell {
+    width: 60px;
+    height: 9px;
+    background: var(--cell-empty);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-bottom: none;
+    cursor: pointer;
+    transition: background 0.05s ease;
+  }
+  td.cell:hover {
+    background: var(--cell-hover);
+  }
+  td.cell.selected {
+    background: var(--cell-selected);
+  }
+  tr.hour-boundary td.cell {
+    border-top: 1px solid var(--border);
+  }
+  tr.hour-boundary td.hourlabel {
+    padding-top: 3px;
+  }
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+  .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+  .swatch.on { background: var(--cell-selected); }
+  .btnrow {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  button {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  button.secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  button:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  #summary {
+    display: none;
+  }
+  #summary.show { display: block; }
+  .summary-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .summary-day {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.92rem;
+    gap: 12px;
+  }
+  .summary-day:last-child { border-bottom: none; }
+  .summary-day .day {
+    font-weight: 600;
+    min-width: 90px;
+  }
+  .summary-day .ranges {
+    color: var(--muted);
+    text-align: right;
+    flex: 1;
+  }
+  .summary-day .daytotal {
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 56px;
+    text-align: right;
+  }
+  .summary-total {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0 2px;
+    margin-top: 4px;
+    border-top: 2px solid var(--border);
+    font-size: 0.95rem;
+    font-weight: 700;
+    gap: 12px;
+  }
+  .summary-total .ranges {
+    color: var(--accent);
+    text-align: right;
+    flex: 1;
+  }
+  .empty-note {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .error-note {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin: -4px 0 8px;
+    min-height: 1em;
+  }
+  .admin-person {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  #authScreen {
+    max-width: 360px;
+    margin: 60px auto;
+  }
+  @media (max-width: 640px) {
+    body { padding: 16px 10px 50px; }
+    h1 { font-size: 1.2rem; }
+    .card { padding: 14px; border-radius: 10px; }
+    input[type="text"], input[type="email"], input[type="password"] { max-width: 100%; font-size: 1rem; padding: 10px 12px; }
+    .btnrow { flex-direction: column; }
+    .btnrow button { width: 100%; padding: 12px; font-size: 1rem; }
+    table { min-width: 520px; }
+    th { font-size: 0.72rem; }
+    td.hourlabel { font-size: 0.68rem; }
+    td.cell { width: 44px; height: 11px; }
+    .scroll-hint { display: block; }
+    .summary-day, .summary-total { font-size: 0.88rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card" id="authScreen">
+    <h1>Sign in</h1>
+    <p class="sub">Use the email and password your admin gave you.</p>
+    <label for="loginEmail">Email</label>
+    <input type="email" id="loginEmail" autocomplete="username">
+    <label for="loginPassword">Password</label>
+    <input type="password" id="loginPassword" autocomplete="current-password">
+    <div class="error-note" id="loginError"></div>
+    <button class="primary" id="loginBtn">Sign in</button>
+  </div>
+
+  <div id="appScreen" style="display:none;">
+    <div class="topbar">
+      <h1>Weekly Hours Tracker</h1>
+      <div>
+        <span class="who" id="whoLabel"></span>
+        <button class="secondary" id="signOutBtn" style="margin-left:10px;">Sign out</button>
+      </div>
+    </div>
+    <p class="sub">Click a cell, or click and drag, to mark the hours you worked. Click again to unmark. Hit Save when you're done.</p>
+
+    <div class="card">
+      <div class="grid-scroll">
+        <table id="grid"></table>
+      </div>
+      <p class="scroll-hint">Scroll sideways to see all days &rarr;</p>
+      <div class="legend">
+        <span class="swatch on"></span> Marked as worked
+      </div>
+      <div class="error-note" id="saveError"></div>
+      <div class="btnrow">
+        <button class="primary" id="saveBtn">Save</button>
+        <button class="secondary" id="clearBtn">Clear all</button>
+      </div>
+    </div>
+
+    <div class="card" id="summary">
+      <div class="summary-name" id="summaryName"></div>
+      <div id="summaryBody"></div>
+    </div>
+
+    <div class="card" id="adminCard" style="display:none;">
+      <div class="topbar">
+        <h2>Everyone's hours this week</h2>
+        <div class="btnrow" style="margin-top:0;">
+          <button class="secondary" id="copyAllBtn">Copy all as spreadsheet</button>
+          <button class="secondary" id="downloadXlsxBtn">Download as Excel (.xlsx)</button>
+        </div>
+      </div>
+      <div id="adminBody"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  // These come from config.js, which sits next to this file and is loaded
+  // above via <script src="config.js">. Edit config.js, not this file, to
+  // change your Supabase project connection.
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  var DAYS = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
+  var START_HOUR = 6;   // 6 AM
+  var END_HOUR = 24;    // up to midnight
+  var SLOTS_PER_HOUR = 4; // 15-minute increments
+  var slots = [];
+  for (var s = START_HOUR * SLOTS_PER_HOUR; s < END_HOUR * SLOTS_PER_HOUR; s++) slots.push(s);
+
+  function getWeekDates() {
+    var today = new Date();
+    var dow = today.getDay(); // 0 = Sun ... 6 = Sat
+    var diffFromSat = (dow - 6 + 7) % 7;
+    var saturday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - diffFromSat);
+    var dates = [];
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(saturday.getFullYear(), saturday.getMonth(), saturday.getDate() + i);
+      dates.push(d);
+    }
+    return dates;
+  }
+
+  function formatDateShort(d) {
+    return (d.getMonth() + 1) + "/" + d.getDate();
+  }
+
+  function toISODate(d) {
+    var mm = String(d.getMonth() + 1).padStart(2, "0");
+    var dd = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + mm + "-" + dd;
+  }
+
+  var weekDates = getWeekDates();
+  var weekStartISO = toISODate(weekDates[0]);
+
+  function formatSlot(slot) {
+    var totalMinutes = slot * (60 / SLOTS_PER_HOUR);
+    var hh = Math.floor(totalMinutes / 60) % 24;
+    var mm = totalMinutes % 60;
+    var ampm = hh < 12 ? "AM" : "PM";
+    var display = hh % 12;
+    if (display === 0) display = 12;
+    var mmStr = mm === 0 ? "00" : String(mm);
+    return display + ":" + mmStr + " " + ampm;
+  }
+
+  var grid = document.getElementById("grid");
+  var thead = document.createElement("thead");
+  var headRow = document.createElement("tr");
+  var corner = document.createElement("th");
+  corner.className = "hourcol";
+  headRow.appendChild(corner);
+  DAYS.forEach(function (d, idx) {
+    var th = document.createElement("th");
+    th.innerHTML = d + '<br><span class="date-sub">' + formatDateShort(weekDates[idx]) + '</span>';
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  grid.appendChild(thead);
+
+  var tbody = document.createElement("tbody");
+  var selected = {}; // key "dayIndex-slot" -> true
+
+  function cellKey(dayIdx, slot) { return dayIdx + "-" + slot; }
+
+  var isMouseDown = false;
+  var dragMode = null;
+
+  slots.forEach(function (slot) {
+    var isHourStart = slot % SLOTS_PER_HOUR === 0;
+    var tr = document.createElement("tr");
+    if (isHourStart) tr.className = "hour-boundary";
+
+    var labelTd = document.createElement("td");
+    labelTd.className = "hourlabel";
+    labelTd.textContent = isHourStart ? formatSlot(slot) : "";
+    tr.appendChild(labelTd);
+
+    DAYS.forEach(function (day, dayIdx) {
+      var td = document.createElement("td");
+      td.className = "cell";
+      td.dataset.day = dayIdx;
+      td.dataset.slot = slot;
+
+      td.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        isMouseDown = true;
+        var key = cellKey(dayIdx, slot);
+        dragMode = !selected[key];
+        toggleCell(td, dayIdx, slot, dragMode);
+      });
+      td.addEventListener("mouseenter", function () {
+        if (isMouseDown) {
+          toggleCell(td, dayIdx, slot, dragMode);
+        }
+      });
+      td.addEventListener("touchstart", function (e) {
+        e.preventDefault();
+        isMouseDown = true;
+        var key = cellKey(dayIdx, slot);
+        dragMode = !selected[key];
+        toggleCell(td, dayIdx, slot, dragMode);
+      }, { passive: false });
+
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  grid.appendChild(tbody);
+
+  document.addEventListener("mouseup", function () {
+    isMouseDown = false;
+    dragMode = null;
+  });
+
+  grid.addEventListener("touchmove", function (e) {
+    if (!isMouseDown) return;
+    e.preventDefault();
+    var touch = e.touches[0];
+    var el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (el && el.classList && el.classList.contains("cell")) {
+      var dayIdx = parseInt(el.dataset.day, 10);
+      var slot = parseInt(el.dataset.slot, 10);
+      toggleCell(el, dayIdx, slot, dragMode);
+    }
+  }, { passive: false });
+
+  document.addEventListener("touchend", function () {
+    isMouseDown = false;
+    dragMode = null;
+  });
+
+  function toggleCell(td, dayIdx, slot, on) {
+    var key = cellKey(dayIdx, slot);
+    selected[key] = on;
+    td.classList.toggle("selected", on);
+    updateSummary();
+  }
+
+  function applySelectedToGrid() {
+    document.querySelectorAll("td.cell").forEach(function (td) {
+      var key = cellKey(td.dataset.day, td.dataset.slot);
+      td.classList.toggle("selected", !!selected[key]);
+    });
+  }
+
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    selected = {};
+    applySelectedToGrid();
+    updateSummary();
+  });
+
+  function mergeRanges(slotList) {
+    slotList = slotList.slice().sort(function (a, b) { return a - b; });
+    var ranges = [];
+    var start = null, prev = null;
+    slotList.forEach(function (s) {
+      if (start === null) {
+        start = s; prev = s;
+      } else if (s === prev + 1) {
+        prev = s;
+      } else {
+        ranges.push([start, prev]);
+        start = s; prev = s;
+      }
+    });
+    if (start !== null) ranges.push([start, prev]);
+    return ranges;
+  }
+
+  function rangeLabel(startSlot, endSlot) {
+    return formatSlot(startSlot) + " \u2013 " + formatSlot(endSlot + 1);
+  }
+
+  function formatDuration(totalMinutes) {
+    var h = Math.floor(totalMinutes / 60);
+    var m = totalMinutes % 60;
+    if (h === 0) return m + "m";
+    if (m === 0) return h + "h";
+    return h + "h " + m + "m";
+  }
+
+  function updateSummary() {
+    var name = currentUserName || "Unnamed";
+    var byDay = {};
+    DAYS.forEach(function (d, i) { byDay[i] = []; });
+    var totalSlots = 0;
+
+    Object.keys(selected).forEach(function (key) {
+      if (!selected[key]) return;
+      var parts = key.split("-");
+      var dayIdx = parseInt(parts[0], 10);
+      var slot = parseInt(parts[1], 10);
+      byDay[dayIdx].push(slot);
+      totalSlots++;
+    });
+
+    var summaryBody = document.getElementById("summaryBody");
+    summaryBody.innerHTML = "";
+    var anySelected = false;
+
+    DAYS.forEach(function (d, i) {
+      var hrs = byDay[i];
+      if (hrs.length === 0) return;
+      anySelected = true;
+      var ranges = mergeRanges(hrs);
+      var rangeText = ranges.map(function (r) { return rangeLabel(r[0], r[1]); }).join(", ");
+      var row = document.createElement("div");
+      row.className = "summary-day";
+      var dayEl = document.createElement("div");
+      dayEl.className = "day";
+      dayEl.textContent = d + " " + formatDateShort(weekDates[i]);
+      var rangesEl = document.createElement("div");
+      rangesEl.className = "ranges";
+      rangesEl.textContent = rangeText;
+      var dayTotalEl = document.createElement("div");
+      dayTotalEl.className = "daytotal";
+      dayTotalEl.textContent = formatDuration(hrs.length * (60 / SLOTS_PER_HOUR));
+      row.appendChild(dayEl);
+      row.appendChild(rangesEl);
+      row.appendChild(dayTotalEl);
+      summaryBody.appendChild(row);
+    });
+
+    if (!anySelected) {
+      var note = document.createElement("div");
+      note.className = "empty-note";
+      note.textContent = "No hours marked yet \u2014 highlight cells above and this updates automatically.";
+      summaryBody.appendChild(note);
+    } else {
+      var totalRow = document.createElement("div");
+      totalRow.className = "summary-total";
+      var totalLabel = document.createElement("div");
+      totalLabel.className = "day";
+      totalLabel.textContent = "Total";
+      var totalValue = document.createElement("div");
+      totalValue.className = "ranges";
+      totalValue.textContent = formatDuration(totalSlots * (60 / SLOTS_PER_HOUR));
+      totalRow.appendChild(totalLabel);
+      totalRow.appendChild(totalValue);
+      summaryBody.appendChild(totalRow);
+    }
+
+    document.getElementById("summaryName").textContent = name;
+    document.getElementById("summary").classList.add("show");
+  }
+
+  // ---------------- Supabase auth / save / load / admin ----------------
+
+  var currentUser = null;
+  var currentUserName = "";
+  var isAdmin = false;
+  var lastAdminRows = [];
+
+  function dayBreakdown(selectionKeys) {
+    var byDay = {};
+    DAYS.forEach(function (d, i) { byDay[i] = []; });
+    (selectionKeys || []).forEach(function (key) {
+      var parts = String(key).split("-");
+      var dIdx = parseInt(parts[0], 10);
+      var slot = parseInt(parts[1], 10);
+      if (byDay[dIdx]) byDay[dIdx].push(slot);
+    });
+    var perDay = DAYS.map(function (d, i) {
+      var hrs = byDay[i];
+      if (hrs.length === 0) return { rangeText: "", minutes: 0 };
+      var ranges = mergeRanges(hrs);
+      var rangeText = ranges.map(function (r) { return rangeLabel(r[0], r[1]); }).join(", ");
+      return { rangeText: rangeText, minutes: hrs.length * (60 / SLOTS_PER_HOUR) };
+    });
+    var totalMinutes = perDay.reduce(function (sum, d) { return sum + d.minutes; }, 0);
+    return { perDay: perDay, totalMinutes: totalMinutes };
+  }
+
+  function renderPersonCard(container, name, selectionKeys) {
+    var card = document.createElement("div");
+    card.className = "admin-person";
+    var title = document.createElement("div");
+    title.className = "summary-name";
+    title.textContent = name || "Unnamed";
+    card.appendChild(title);
+
+    var breakdown = dayBreakdown(selectionKeys);
+    var anySelected = false;
+
+    DAYS.forEach(function (d, i) {
+      var info = breakdown.perDay[i];
+      if (!info.rangeText) return;
+      anySelected = true;
+      var line = document.createElement("div");
+      line.className = "summary-day";
+      var dEl = document.createElement("div");
+      dEl.className = "day";
+      dEl.textContent = d + " " + formatDateShort(weekDates[i]);
+      var rEl = document.createElement("div");
+      rEl.className = "ranges";
+      rEl.textContent = info.rangeText;
+      var tEl = document.createElement("div");
+      tEl.className = "daytotal";
+      tEl.textContent = formatDuration(info.minutes);
+      line.appendChild(dEl);
+      line.appendChild(rEl);
+      line.appendChild(tEl);
+      card.appendChild(line);
+    });
+
+    if (!anySelected) {
+      var note = document.createElement("div");
+      note.className = "empty-note";
+      note.textContent = "No hours saved yet.";
+      card.appendChild(note);
+    } else {
+      var totalRow = document.createElement("div");
+      totalRow.className = "summary-total";
+      var tl = document.createElement("div");
+      tl.className = "day";
+      tl.textContent = "Total";
+      var tv = document.createElement("div");
+      tv.className = "ranges";
+      tv.textContent = formatDuration(breakdown.totalMinutes);
+      totalRow.appendChild(tl);
+      totalRow.appendChild(tv);
+      card.appendChild(totalRow);
+    }
+    container.appendChild(card);
+  }
+
+  function renderAdminList(rows) {
+    var container = document.getElementById("adminBody");
+    container.innerHTML = "";
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<p class="empty-note">No one has saved hours for this week yet.</p>';
+      return;
+    }
+    rows.forEach(function (row) {
+      renderPersonCard(container, row.name, row.selections);
+    });
+  }
+
+  function loadAllHours() {
+    sb.from("weekly_hours").select("*").eq("week_start", weekStartISO)
+      .then(function (res) {
+        if (res.error) { console.error(res.error); return; }
+        lastAdminRows = res.data || [];
+        renderAdminList(lastAdminRows);
+      });
+  }
+
+  function loadMyHours() {
+    return sb.from("weekly_hours").select("*")
+      .eq("user_id", currentUser.id)
+      .eq("week_start", weekStartISO)
+      .maybeSingle()
+      .then(function (res) {
+        if (res.error) { console.error(res.error); return; }
+        if (res.data) {
+          selected = {};
+          (res.data.selections || []).forEach(function (k) { selected[k] = true; });
+          applySelectedToGrid();
+        }
+        updateSummary();
+      });
+  }
+
+  function saveMyHours() {
+    var saveBtn = document.getElementById("saveBtn");
+    var saveError = document.getElementById("saveError");
+    saveError.textContent = "";
+    var name = currentUserName || "Unnamed";
+    var keys = Object.keys(selected).filter(function (k) { return selected[k]; });
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+
+    sb.from("weekly_hours").upsert({
+      user_id: currentUser.id,
+      name: name,
+      week_start: weekStartISO,
+      selections: keys,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id,week_start" }).then(function (res) {
+      saveBtn.disabled = false;
+      if (res.error) {
+        saveError.textContent = "Save failed: " + res.error.message;
+        saveBtn.textContent = "Save";
+        return;
+      }
+      saveBtn.textContent = "Saved \u2713";
+      setTimeout(function () { saveBtn.textContent = "Save"; }, 1500);
+      if (isAdmin) loadAllHours();
+    });
+  }
+
+  document.getElementById("saveBtn").addEventListener("click", saveMyHours);
+
+  function buildAdminRows(rows) {
+    var header = ["Name"];
+    DAYS.forEach(function (d, i) { header.push(d + " " + formatDateShort(weekDates[i])); });
+    header.push("Total");
+
+    var aoa = [header];
+    rows.forEach(function (row) {
+      var breakdown = dayBreakdown(row.selections);
+      var line = [row.name || "Unnamed"];
+      breakdown.perDay.forEach(function (info) {
+        line.push(info.rangeText || "");
+      });
+      line.push(breakdown.totalMinutes > 0 ? formatDuration(breakdown.totalMinutes) : "");
+      aoa.push(line);
+    });
+    return aoa;
+  }
+
+  function buildAdminTSV(rows) {
+    return buildAdminRows(rows).map(function (line) { return line.join("\t"); }).join("\n");
+  }
+
+  document.getElementById("copyAllBtn").addEventListener("click", function () {
+    var btn = document.getElementById("copyAllBtn");
+    if (!lastAdminRows || lastAdminRows.length === 0) {
+      btn.textContent = "Nothing to copy";
+      setTimeout(function () { btn.textContent = "Copy all as spreadsheet"; }, 1500);
+      return;
+    }
+    var tsv = buildAdminTSV(lastAdminRows);
+    navigator.clipboard.writeText(tsv).then(function () {
+      btn.textContent = "Copied \u2713";
+      setTimeout(function () { btn.textContent = "Copy all as spreadsheet"; }, 1500);
+    }, function () {
+      btn.textContent = "Copy failed";
+      setTimeout(function () { btn.textContent = "Copy all as spreadsheet"; }, 1500);
+    });
+  });
+
+  document.getElementById("downloadXlsxBtn").addEventListener("click", function () {
+    var btn = document.getElementById("downloadXlsxBtn");
+    if (!lastAdminRows || lastAdminRows.length === 0) {
+      btn.textContent = "Nothing to download";
+      setTimeout(function () { btn.textContent = "Download as Excel (.xlsx)"; }, 1500);
+      return;
+    }
+    var aoa = buildAdminRows(lastAdminRows);
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = aoa[0].map(function () { return { wch: 18 }; });
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Weekly Hours");
+    XLSX.writeFile(wb, "weekly-hours-" + weekStartISO + ".xlsx");
+  });
+
+  function showApp() {
+    document.getElementById("authScreen").style.display = "none";
+    document.getElementById("appScreen").style.display = "block";
+  }
+
+  function onSignedIn(user) {
+    currentUser = user;
+    showApp();
+
+    sb.from("profiles").select("is_admin, name").eq("id", user.id).maybeSingle()
+      .then(function (res) {
+        isAdmin = !!(res.data && res.data.is_admin);
+        currentUserName = (res.data && res.data.name) || user.email;
+        document.getElementById("whoLabel").textContent = currentUserName;
+        if (isAdmin) {
+          document.getElementById("adminCard").style.display = "block";
+          loadAllHours();
+        }
+        updateSummary();
+      });
+
+    loadMyHours();
+  }
+
+  document.getElementById("loginBtn").addEventListener("click", function () {
+    var email = document.getElementById("loginEmail").value.trim();
+    var password = document.getElementById("loginPassword").value;
+    var loginError = document.getElementById("loginError");
+    loginError.textContent = "";
+    if (!email || !password) {
+      loginError.textContent = "Enter your email and password.";
+      return;
+    }
+    sb.auth.signInWithPassword({ email: email, password: password }).then(function (res) {
+      if (res.error) {
+        loginError.textContent = res.error.message;
+        return;
+      }
+      onSignedIn(res.data.user);
+    });
+  });
+
+  document.getElementById("signOutBtn").addEventListener("click", function () {
+    sb.auth.signOut().then(function () { location.reload(); });
+  });
+
+  sb.auth.getSession().then(function (res) {
+    var session = res.data && res.data.session;
+    if (session) {
+      onSignedIn(session.user);
+    }
+  });
+})();
+</script>
+</body>
+</html>
