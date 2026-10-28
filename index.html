@@ -50,7 +50,6 @@
     --danger: #f87171;
   }
   * { box-sizing: border-box; }
-  html { overflow-x: clip; }
   body {
     margin: 0;
     background: var(--bg);
@@ -111,24 +110,16 @@
     font-size: 0.95rem;
     margin-bottom: 12px;
   }
-  /* Week grid breaks out of .wrap to span the full viewport width. */
+  /* Week card shrinks to wrap the grid. */
   .card.week {
-    width: 100vw;
-    margin-left: calc(50% - 50vw);
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    padding: 0 0 18px;
-  }
-  .card.week > :not(.grid-scroll) {
-    padding-left: 16px;
-    padding-right: 16px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
   }
   table {
     border-collapse: collapse;
-    /* Day columns at half the full-width size; the 64px hour column stays fixed. */
-    width: calc(50% + 32px);
-    margin: 0 auto;
+    /* Day columns at half the full-window size; the 64px hour column stays fixed. */
+    width: calc(50vw + 32px);
     user-select: none;
     touch-action: none;
   }
