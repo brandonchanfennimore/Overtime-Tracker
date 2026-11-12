@@ -396,13 +396,15 @@
         <button class="secondary" id="signOutBtn" style="margin-left:10px;">Sign out</button>
       </div>
     </div>
+    <!-- Hour entry for regular users. Admins only see the admin card. -->
+    <div id="entryArea" style="display:none;">
     <p class="sub">Click a cell, or click and drag, to mark the hours you worked. Click again to unmark. Hit Save when you're done.</p>
 
     <div class="card week">
       <div class="viewswitch" role="group" aria-label="View">
         View:
-        <button type="button" class="seg active" data-view="schedule" aria-pressed="true">Schedule</button>
-        <button type="button" class="seg" data-view="manual" aria-pressed="false">Manual</button>
+        <button type="button" class="seg active" data-view="manual" aria-pressed="true">Manual</button>
+        <button type="button" class="seg" data-view="schedule" aria-pressed="false">Schedule</button>
       </div>
       <div id="manualView" style="display:none;"></div>
       <div class="grid-scroll">
@@ -423,6 +425,7 @@
       <div class="weeknav" id="myWeekNav"></div>
       <div class="summary-name" id="summaryName"></div>
       <div id="summaryBody"></div>
+    </div>
     </div>
 
     <div class="card" id="adminCard" style="display:none;">
@@ -613,10 +616,10 @@
     dragMode = null;
   });
 
-  // Regular users can only change the current week; admins can change any week.
+  // Users can only change the current week.
   var currentWeekISO = weekStartISO;
   function isReadOnly() {
-    return weekStartISO !== currentWeekISO && !isAdmin;
+    return weekStartISO !== currentWeekISO;
   }
 
   function applyReadOnly() {
@@ -1043,7 +1046,6 @@
       }
       saveBtn.textContent = "Saved \u2713";
       setTimeout(function () { saveBtn.textContent = "Save"; }, 1500);
-      if (isAdmin) loadAllHours();
     });
   }
 
@@ -1120,11 +1122,11 @@
         if (isAdmin) {
           document.getElementById("adminCard").style.display = "block";
           loadAllHours();
+        } else {
+          document.getElementById("entryArea").style.display = "block";
+          loadMyHours();
         }
-        updateSummary();
       });
-
-    loadMyHours();
   }
 
   document.getElementById("loginBtn").addEventListener("click", function () {
