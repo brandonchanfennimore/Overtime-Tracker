@@ -447,8 +447,8 @@
   // change your Supabase project connection.
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  var DAYS = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
-  var DAY_NAMES = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+  var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   var START_HOUR = 0;   // midnight
   var END_HOUR = 24;    // up to midnight
   var SLOTS_PER_HOUR = 4; // 15-minute increments
@@ -458,11 +458,10 @@
   function getWeekDates(weeksBack) {
     var today = new Date();
     var dow = today.getDay(); // 0 = Sun ... 6 = Sat
-    var diffFromSat = (dow - 6 + 7) % 7;
-    var saturday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - diffFromSat - 7 * weeksBack);
+    var sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - dow - 7 * weeksBack);
     var dates = [];
     for (var i = 0; i < 7; i++) {
-      var d = new Date(saturday.getFullYear(), saturday.getMonth(), saturday.getDate() + i);
+      var d = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + i);
       dates.push(d);
     }
     return dates;

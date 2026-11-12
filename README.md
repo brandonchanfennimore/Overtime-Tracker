@@ -25,7 +25,7 @@ Before this, collecting hours meant chasing people for times and copying them in
 
 ## How It Works
 
-- Weeks run **Saturday to Friday**, and the app always opens on the current week.
+- Weeks run **Sunday to Saturday**, and the app always opens on the current week.
 - Each block on the grid is stored as a day and a 15-minute slot. When you save, the app sends the list of blocks you marked to Supabase.
 - The app merges neighboring blocks into shifts (for example, 9:00 AM to 5:00 PM) and adds up the totals.
 - Each person has one saved record per week, so saving again updates that week instead of making a copy.
