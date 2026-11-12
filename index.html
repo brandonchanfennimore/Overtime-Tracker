@@ -243,6 +243,14 @@
     color: var(--accent);
     border: 1px solid var(--border);
   }
+  .weeknav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
   .legend {
     display: flex;
     align-items: center;
@@ -403,6 +411,7 @@
       <div class="legend">
         <span class="swatch on"></span> Marked as worked
       </div>
+      <p class="empty-note" id="readOnlyNote" style="display:none;">Past weeks are view-only.</p>
       <div class="error-note" id="saveError"></div>
       <div class="btnrow">
         <button class="primary" id="saveBtn">Save</button>
@@ -411,18 +420,20 @@
     </div>
 
     <div class="card" id="summary">
+      <div class="weeknav" id="myWeekNav"></div>
       <div class="summary-name" id="summaryName"></div>
       <div id="summaryBody"></div>
     </div>
 
     <div class="card" id="adminCard" style="display:none;">
       <div class="topbar">
-        <h2>Everyone's hours this week</h2>
+        <h2>Everyone's hours</h2>
         <div class="btnrow" style="margin-top:0;">
           <button class="secondary" id="copyAllBtn">Copy all as spreadsheet</button>
           <button class="secondary" id="downloadXlsxBtn">Download as Excel (.xlsx)</button>
         </div>
       </div>
+      <div class="weeknav" id="adminWeekNav"></div>
       <div id="adminBody"></div>
     </div>
   </div>
@@ -444,11 +455,11 @@
   var slots = [];
   for (var s = START_HOUR * SLOTS_PER_HOUR; s < END_HOUR * SLOTS_PER_HOUR; s++) slots.push(s);
 
-  function getWeekDates() {
+  function getWeekDates(weeksBack) {
     var today = new Date();
     var dow = today.getDay(); // 0 = Sun ... 6 = Sat
     var diffFromSat = (dow - 6 + 7) % 7;
-    var saturday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - diffFromSat);
+    var saturday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - diffFromSat - 7 * weeksBack);
     var dates = [];
     for (var i = 0; i < 7; i++) {
       var d = new Date(saturday.getFullYear(), saturday.getMonth(), saturday.getDate() + i);
@@ -467,8 +478,38 @@
     return d.getFullYear() + "-" + mm + "-" + dd;
   }
 
-  var weekDates = getWeekDates();
+  // The week the user is editing, and the week the admin list shows. Each has its own picker.
+  var weekDates = getWeekDates(0);
   var weekStartISO = toISODate(weekDates[0]);
+  var adminWeekDates = weekDates;
+  var adminWeekStartISO = weekStartISO;
+
+  // Builds a "<- 11/7 - 11/13 ->" picker in container; calls onChange(dates) when the week changes.
+  function weekNav(container, onChange) {
+    var weeksBack = 0;
+    var prev = document.createElement("button");
+    var label = document.createElement("span");
+    var next = document.createElement("button");
+    prev.type = next.type = "button";
+    prev.className = next.className = "icon";
+    prev.textContent = "\u2190";
+    next.textContent = "\u2192";
+    prev.setAttribute("aria-label", "Previous week");
+    next.setAttribute("aria-label", "Next week");
+    function go(delta) {
+      weeksBack += delta;
+      var dates = getWeekDates(weeksBack);
+      label.textContent = formatDateShort(dates[0]) + " - " + formatDateShort(dates[6]);
+      next.disabled = weeksBack === 0; // no future weeks
+      if (delta) onChange(dates);
+    }
+    prev.addEventListener("click", function () { go(1); });
+    next.addEventListener("click", function () { go(-1); });
+    container.appendChild(prev);
+    container.appendChild(label);
+    container.appendChild(next);
+    go(0);
+  }
 
   function formatSlot(slot) {
     var totalMinutes = slot * (60 / SLOTS_PER_HOUR);
@@ -487,11 +528,17 @@
   var corner = document.createElement("th");
   corner.className = "hourcol";
   headRow.appendChild(corner);
-  DAYS.forEach(function (d, idx) {
+  var dayHeaders = DAYS.map(function () {
     var th = document.createElement("th");
-    th.innerHTML = d + '<br><span class="date-sub">' + formatDateShort(weekDates[idx]) + '</span>';
     headRow.appendChild(th);
+    return th;
   });
+  function renderGridHeader() {
+    dayHeaders.forEach(function (th, idx) {
+      th.innerHTML = DAYS[idx] + '<br><span class="date-sub">' + formatDateShort(weekDates[idx]) + '</span>';
+    });
+  }
+  renderGridHeader();
   thead.appendChild(headRow);
   grid.appendChild(thead);
 
@@ -567,7 +614,21 @@
     dragMode = null;
   });
 
+  // Regular users can only change the current week; admins can change any week.
+  var currentWeekISO = weekStartISO;
+  function isReadOnly() {
+    return weekStartISO !== currentWeekISO && !isAdmin;
+  }
+
+  function applyReadOnly() {
+    var ro = isReadOnly();
+    document.getElementById("saveBtn").disabled = ro;
+    document.getElementById("clearBtn").disabled = ro;
+    document.getElementById("readOnlyNote").style.display = ro ? "block" : "none";
+  }
+
   function toggleCell(td, dayIdx, slot, on) {
+    if (isReadOnly()) return;
     var key = cellKey(dayIdx, slot);
     selected[key] = on;
     td.classList.toggle("selected", on);
@@ -662,10 +723,11 @@
       if (e.key === "Enter") commit();
     });
 
+    startIn.disabled = endIn.disabled = isReadOnly();
     row.appendChild(startIn);
     row.appendChild(document.createTextNode("\u2013"));
     row.appendChild(endIn);
-    row.appendChild(removeBtn);
+    if (!isReadOnly()) row.appendChild(removeBtn);
     return row;
   }
 
@@ -688,7 +750,7 @@
         renderManual();
       });
       head.appendChild(name);
-      head.appendChild(addBtn);
+      if (!isReadOnly()) head.appendChild(addBtn);
       dayEl.appendChild(head);
 
       var daySlots = slots.filter(function (s) { return selected[cellKey(dayIdx, s)]; });
@@ -716,6 +778,7 @@
       if (manual) renderManual();
     });
   });
+  document.querySelector('.viewswitch .seg[data-view="manual"]').click(); // Manual is the default view
 
   document.getElementById("clearBtn").addEventListener("click", function () {
     selected = {};
@@ -864,7 +927,7 @@
       line.className = "summary-day";
       var dEl = document.createElement("div");
       dEl.className = "day";
-      dEl.textContent = d + " " + formatDateShort(weekDates[i]);
+      dEl.textContent = d + " " + formatDateShort(adminWeekDates[i]);
       var rEl = document.createElement("div");
       rEl.className = "ranges";
       rEl.textContent = info.rangeText;
@@ -911,8 +974,10 @@
   }
 
   function loadAllHours() {
-    sb.from("weekly_hours").select("*").eq("week_start", weekStartISO)
+    var week = adminWeekStartISO;
+    sb.from("weekly_hours").select("*").eq("week_start", week)
       .then(function (res) {
+        if (week !== adminWeekStartISO) return; // picker moved on while loading
         if (res.error) { console.error(res.error); return; }
         lastAdminRows = res.data || [];
         renderAdminList(lastAdminRows);
@@ -920,20 +985,39 @@
   }
 
   function loadMyHours() {
+    var week = weekStartISO;
     return sb.from("weekly_hours").select("*")
       .eq("user_id", currentUser.id)
-      .eq("week_start", weekStartISO)
+      .eq("week_start", week)
       .maybeSingle()
       .then(function (res) {
+        if (week !== weekStartISO) return; // picker moved on while loading
         if (res.error) { console.error(res.error); return; }
-        if (res.data) {
-          selected = {};
-          (res.data.selections || []).forEach(function (k) { selected[k] = true; });
-          applySelectedToGrid();
-        }
+        selected = {};
+        ((res.data && res.data.selections) || []).forEach(function (k) { selected[k] = true; });
+        applySelectedToGrid();
         updateSummary();
       });
   }
+
+  weekNav(document.getElementById("myWeekNav"), function (dates) {
+    weekDates = dates;
+    weekStartISO = toISODate(dates[0]);
+    selected = {};
+    pendingRows = {};
+    renderGridHeader();
+    applyReadOnly();
+    applySelectedToGrid();
+    updateSummary();
+    loadMyHours();
+  });
+
+  weekNav(document.getElementById("adminWeekNav"), function (dates) {
+    adminWeekDates = dates;
+    adminWeekStartISO = toISODate(dates[0]);
+    document.getElementById("adminBody").innerHTML = "";
+    loadAllHours();
+  });
 
   function saveMyHours() {
     var saveBtn = document.getElementById("saveBtn");
@@ -968,7 +1052,7 @@
 
   function buildAdminRows(rows) {
     var header = ["Name"];
-    DAYS.forEach(function (d, i) { header.push(d + " " + formatDateShort(weekDates[i])); });
+    DAYS.forEach(function (d, i) { header.push(d + " " + formatDateShort(adminWeekDates[i])); });
     header.push("Total");
 
     var aoa = [header];
@@ -1017,7 +1101,7 @@
     ws["!cols"] = aoa[0].map(function () { return { wch: 18 }; });
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Weekly Hours");
-    XLSX.writeFile(wb, "weekly-hours-" + weekStartISO + ".xlsx");
+    XLSX.writeFile(wb, "weekly-hours-" + adminWeekStartISO + ".xlsx");
   });
 
   function showApp() {
