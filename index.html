@@ -89,6 +89,70 @@
     gap: 12px;
     flex-wrap: wrap;
   }
+  .title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .modal {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--text);
+    padding: 18px;
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+  }
+  .modal::backdrop { background: rgba(0, 0, 0, 0.45); }
+  .modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+  .modal-head h2 { margin: 0; }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal .sub { margin-bottom: 12px; }
+  .users-head, .user-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 36px;
+    gap: 12px;
+    align-items: center;
+  }
+  .users-head {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .sortbtn {
+    background: transparent;
+    color: var(--muted);
+    padding: 0;
+    font-size: 0.8rem;
+    text-align: left;
+  }
+  .sortbtn.active { color: var(--text); }
+  .user-row {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.92rem;
+  }
+  .user-row .email {
+    color: var(--muted);
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+  }
+  .tag {
+    font-size: 0.7rem;
+    color: var(--accent);
+    margin-left: 6px;
+  }
+  button.icon.danger { color: var(--danger); }
   .topbar .who {
     color: var(--muted);
     font-size: 0.85rem;
@@ -390,7 +454,13 @@
 
   <div id="appScreen" style="display:none;">
     <div class="topbar">
-      <h1>Weekly Hours Tracker</h1>
+      <div class="title-group">
+        <button class="secondary with-icon" id="usersBtn" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Users
+        </button>
+        <h1>Weekly Hours Tracker</h1>
+      </div>
       <div>
         <span class="who" id="whoLabel"></span>
         <button class="secondary" id="signOutBtn" style="margin-left:10px;">Sign out</button>
@@ -442,6 +512,46 @@
   </div>
 
 </div>
+
+<dialog class="modal" id="usersModal" aria-labelledby="usersTitle">
+  <div class="modal-head">
+    <h2 id="usersTitle">Users</h2>
+    <div class="modal-actions">
+      <button type="button" class="icon" id="addUserBtn" aria-label="Add user">+</button>
+      <button type="button" class="icon" id="closeUsersBtn" aria-label="Close">&times;</button>
+    </div>
+  </div>
+  <p class="sub" id="userCount"></p>
+  <div class="users-head">
+    <button type="button" class="sortbtn" data-sort="employee_id">Employee #</button>
+    <button type="button" class="sortbtn" data-sort="name">Name</button>
+    <span></span>
+  </div>
+  <div id="usersList"></div>
+  <div class="error-note" id="usersError"></div>
+</dialog>
+
+<dialog class="modal" id="addUserModal" aria-labelledby="addUserTitle">
+  <form id="addUserForm">
+    <div class="modal-head">
+      <h2 id="addUserTitle">Add user</h2>
+      <button type="button" class="icon" id="closeAddUserBtn" aria-label="Close">&times;</button>
+    </div>
+    <p class="sub">They sign in with this email and password.</p>
+    <label for="newName">Name</label>
+    <input type="text" id="newName" required>
+    <label for="newEmployeeId">Employee ID</label>
+    <input type="text" id="newEmployeeId" required>
+    <label for="newEmail">Email</label>
+    <input type="email" id="newEmail" autocomplete="off" required>
+    <label for="newPassword">Password</label>
+    <input type="password" id="newPassword" autocomplete="new-password" minlength="6" required>
+    <div class="error-note" id="addUserError"></div>
+    <div class="btnrow">
+      <button type="submit" class="primary" id="createUserBtn">Create user</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 (function () {
@@ -1110,6 +1220,144 @@
     document.getElementById("appScreen").style.display = "block";
   }
 
+  // ---------------- Admin: manage users (via /api/users) ----------------
+
+  var users = [];
+  var userSort = { key: "employee_id", dir: 1 };
+  var usersModal = document.getElementById("usersModal");
+  var addUserModal = document.getElementById("addUserModal");
+  var TRASH_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
+
+  function usersApi(method, body, query) {
+    return sb.auth.getSession().then(function (r) {
+      var token = r.data.session && r.data.session.access_token;
+      return fetch("/api/users" + (query || ""), {
+        method: method,
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined
+      });
+    }).then(function (res) {
+      if (res.status === 204) return null;
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) throw new Error(data.error || "Request failed (" + res.status + ")");
+        return data;
+      });
+    });
+  }
+
+  function loadUsers() {
+    document.getElementById("usersError").textContent = "";
+    return usersApi("GET").then(function (data) {
+      users = data;
+      renderUsers();
+    }).catch(function (err) {
+      document.getElementById("usersError").textContent = err.message;
+    });
+  }
+
+  function renderUsers() {
+    document.getElementById("userCount").textContent = users.length + (users.length === 1 ? " user" : " users");
+
+    document.querySelectorAll(".sortbtn").forEach(function (btn) {
+      var active = btn.dataset.sort === userSort.key;
+      btn.classList.toggle("active", active);
+      btn.textContent = btn.dataset.sort === "name" ? "Name" : "Employee #";
+      if (active) btn.textContent += userSort.dir === 1 ? " \u25B2" : " \u25BC";
+    });
+
+    var sorted = users.slice().sort(function (a, b) {
+      return String(a[userSort.key]).localeCompare(String(b[userSort.key]), undefined, { numeric: true, sensitivity: "base" }) * userSort.dir;
+    });
+
+    var list = document.getElementById("usersList");
+    list.innerHTML = "";
+    sorted.forEach(function (u) {
+      var row = document.createElement("div");
+      row.className = "user-row";
+      var emp = document.createElement("div");
+      emp.textContent = u.employee_id || "\u2014";
+      var who = document.createElement("div");
+      var name = document.createElement("div");
+      name.textContent = u.name || "Unnamed";
+      if (u.is_admin) {
+        var tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = "Admin";
+        name.appendChild(tag);
+      }
+      var email = document.createElement("div");
+      email.className = "email";
+      email.textContent = u.email;
+      who.appendChild(name);
+      who.appendChild(email);
+      row.appendChild(emp);
+      row.appendChild(who);
+
+      var cell = document.createElement("div");
+      if (u.id !== currentUser.id) {
+        var del = document.createElement("button");
+        del.type = "button";
+        del.className = "icon danger";
+        del.innerHTML = TRASH_SVG;
+        del.setAttribute("aria-label", "Delete " + (u.name || u.email));
+        del.addEventListener("click", function () {
+          if (!confirm("Delete " + (u.name || u.email) + "? This removes their login and can't be undone.")) return;
+          del.disabled = true;
+          usersApi("DELETE", null, "?id=" + encodeURIComponent(u.id)).then(loadUsers).catch(function (err) {
+            del.disabled = false;
+            document.getElementById("usersError").textContent = err.message;
+          });
+        });
+        cell.appendChild(del);
+      }
+      row.appendChild(cell);
+      list.appendChild(row);
+    });
+  }
+
+  document.querySelectorAll(".sortbtn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (userSort.key === btn.dataset.sort) userSort.dir *= -1;
+      else userSort = { key: btn.dataset.sort, dir: 1 };
+      renderUsers();
+    });
+  });
+
+  document.getElementById("usersBtn").addEventListener("click", function () {
+    usersModal.showModal();
+    loadUsers();
+  });
+  document.getElementById("closeUsersBtn").addEventListener("click", function () { usersModal.close(); });
+  document.getElementById("addUserBtn").addEventListener("click", function () {
+    document.getElementById("addUserForm").reset();
+    document.getElementById("addUserError").textContent = "";
+    addUserModal.showModal();
+  });
+  document.getElementById("closeAddUserBtn").addEventListener("click", function () { addUserModal.close(); });
+
+  document.getElementById("addUserForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var btn = document.getElementById("createUserBtn");
+    var error = document.getElementById("addUserError");
+    error.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Creating...";
+    usersApi("POST", {
+      name: document.getElementById("newName").value.trim(),
+      employee_id: document.getElementById("newEmployeeId").value.trim(),
+      email: document.getElementById("newEmail").value.trim(),
+      password: document.getElementById("newPassword").value
+    }).then(function () {
+      addUserModal.close();
+      loadUsers();
+    }).catch(function (err) {
+      error.textContent = err.message;
+    }).then(function () {
+      btn.disabled = false;
+      btn.textContent = "Create user";
+    });
+  });
+
   function onSignedIn(user) {
     currentUser = user;
     showApp();
@@ -1121,6 +1369,7 @@
         document.getElementById("whoLabel").textContent = currentUserName;
         if (isAdmin) {
           document.getElementById("adminCard").style.display = "block";
+          document.getElementById("usersBtn").style.display = "inline-flex";
           loadAllHours();
         } else {
           document.getElementById("entryArea").style.display = "block";
