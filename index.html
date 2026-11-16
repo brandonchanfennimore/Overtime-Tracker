@@ -54,8 +54,11 @@
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.45;
     padding: 24px 16px 60px;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
   }
   .wrap {
     max-width: 900px;
@@ -63,10 +66,14 @@
   }
   h1 {
     font-size: 1.4rem;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
     margin: 0 0 4px;
   }
   h2 {
     font-size: 1.05rem;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
     margin: 0 0 12px;
   }
   .sub {
@@ -107,8 +114,16 @@
     padding: 18px;
     width: min(560px, calc(100vw - 32px));
     max-height: calc(100vh - 64px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
   }
-  .modal::backdrop { background: rgba(0, 0, 0, 0.45); }
+  .modal::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+  }
+  .modal[open] { animation: modal-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+  .modal[open]::backdrop { animation: fade-in 220ms ease-out; }
+  @keyframes modal-in { from { opacity: 0; transform: scale(0.97); } }
+  @keyframes fade-in { from { opacity: 0; } }
   .modal-head {
     display: flex;
     justify-content: space-between;
@@ -252,22 +267,35 @@
   .viewswitch {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 12px;
     margin-bottom: 12px;
     font-size: 0.85rem;
     color: var(--muted);
   }
-  .viewswitch .seg {
-    padding: 6px 12px;
-    font-size: 0.85rem;
-    background: transparent;
-    color: var(--text);
+  .segmented {
+    display: inline-flex;
+    padding: 3px;
+    gap: 2px;
+    border-radius: 9px;
+    background: var(--bg);
     border: 1px solid var(--border);
   }
+  .viewswitch .seg {
+    padding: 5px 14px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+  }
   .viewswitch .seg.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
+    background: var(--card);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border);
+  }
+  .entry-week {
+    margin-left: auto;
+    font-weight: 600;
+    color: var(--text);
   }
   #manualView {
     width: max(300px, calc(50vw + 32px));
@@ -301,7 +329,12 @@
   }
   .manual-range input.invalid { border-color: var(--danger); }
   button.icon {
-    padding: 4px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
     font-size: 1rem;
     line-height: 1;
     background: transparent;
@@ -348,22 +381,38 @@
     border: none;
     border-radius: 8px;
     padding: 10px 16px;
+    font: inherit;
     font-size: 0.9rem;
     cursor: pointer;
     font-weight: 600;
+    touch-action: manipulation;
+    transition: transform 100ms ease-out, background-color 120ms ease, filter 120ms ease;
+  }
+  button:active:not(:disabled) { transform: scale(0.97); }
+  button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   button.primary {
     background: var(--accent);
     color: #fff;
   }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
   button.secondary {
     background: transparent;
     color: var(--text);
     border: 1px solid var(--border);
   }
+  button.secondary:hover:not(:disabled),
+  button.icon:hover:not(:disabled),
+  .viewswitch .seg:not(.active):hover { background: var(--cell-hover); }
   button:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: default;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    button:active:not(:disabled) { transform: none; }
   }
   #summary {
     display: none;
@@ -479,6 +528,8 @@
     th { font-size: 0.72rem; }
     td.hourlabel { font-size: 0.68rem; }
     .summary-day, .summary-total { font-size: 0.88rem; }
+    .manual-range input[type="time"], .unlock-add select { font-size: 16px; }
+    .topbar > div:last-child { display: flex; align-items: center; margin-left: auto; }
   }
 </style>
 </head>
@@ -512,13 +563,15 @@
     </div>
     <!-- Hour entry for regular users. Admins only see the admin card. -->
     <div id="entryArea" style="display:none;">
-    <p class="sub">Click a cell, or click and drag, to mark the hours you worked. Click again to unmark. Hit Save when you're done.</p>
+    <p class="sub">Add the times you worked with +, or switch to Schedule and click or drag across the hours. Hit Save when you're done.</p>
 
     <div class="card week">
-      <div class="viewswitch" role="group" aria-label="View">
-        View:
-        <button type="button" class="seg active" data-view="manual" aria-pressed="true">Manual</button>
-        <button type="button" class="seg" data-view="schedule" aria-pressed="false">Schedule</button>
+      <div class="viewswitch">
+        <div class="segmented" role="group" aria-label="View">
+          <button type="button" class="seg active" data-view="manual" aria-pressed="true">Manual</button>
+          <button type="button" class="seg" data-view="schedule" aria-pressed="false">Schedule</button>
+        </div>
+        <span class="entry-week" id="entryWeekLabel"></span>
       </div>
       <div id="manualView" style="display:none;"></div>
       <div class="grid-scroll">
@@ -707,6 +760,9 @@
     dayHeaders.forEach(function (th, idx) {
       th.innerHTML = DAYS[idx] + '<br><span class="date-sub">' + formatDateShort(weekDates[idx]) + '</span>';
     });
+    // Shows which week the entry card is editing.
+    document.getElementById("entryWeekLabel").textContent =
+      formatDateShort(weekDates[0]) + " - " + formatDateShort(weekDates[6]);
   }
   renderGridHeader();
   thead.appendChild(headRow);
