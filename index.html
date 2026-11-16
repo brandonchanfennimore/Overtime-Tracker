@@ -1164,26 +1164,84 @@
 
   document.getElementById("saveBtn").addEventListener("click", saveMyHours);
 
-  function buildAdminRows(rows) {
-    var header = ["Name"];
-    DAYS.forEach(function (d, i) { header.push(d + " " + formatDateShort(adminWeekDates[i])); });
-    header.push("Total");
+  // ---------------- Admin export (matches the "Employee Hours.xlsx" layout) ----------------
+  // Time inside 9 AM - 5 PM goes in the main list with an Hours column; time
+  // outside it goes under "Additional Hours worked by employees:".
 
-    var aoa = [header];
+  var REGULAR_START = 9 * SLOTS_PER_HOUR;
+  var REGULAR_END = 17 * SLOTS_PER_HOUR;
+
+  // Date/time cells carry an Excel value (v), number format (z), and display text (w).
+  function excelDate(d) {
+    return {
+      v: (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 86400000,
+      z: "m/d/yyyy",
+      w: (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear()
+    };
+  }
+  function excelTime(slot) {
+    return { v: slot / (24 * SLOTS_PER_HOUR), z: "h:mm AM/PM", w: formatSlot(slot) };
+  }
+  function excelHours(slotCount) {
+    var minutes = slotCount * (60 / SLOTS_PER_HOUR);
+    var h = Math.floor(minutes / 60), m = minutes % 60;
+    return m ? h + " Hrs " + m + " Min" : h;
+  }
+
+  function buildExportRows(rows) {
+    var userById = {};
+    users.forEach(function (u) { userById[u.id] = u; });
+    var regular = [], extra = [];
+
     rows.forEach(function (row) {
-      var breakdown = dayBreakdown(row.selections);
-      var line = [row.name || "Unnamed"];
-      breakdown.perDay.forEach(function (info) {
-        line.push(info.rangeText || "");
+      var u = userById[row.user_id];
+      var emp = u ? u.employee_id : "";
+      if (/^\d+$/.test(emp)) emp = Number(emp);
+      var lastFirst = u ? (u.last_name ? u.last_name + ", " + u.name : u.name) : row.name;
+      lastFirst = lastFirst || "Unnamed";
+
+      var byDay = {};
+      (row.selections || []).forEach(function (key) {
+        var parts = String(key).split("-");
+        (byDay[parts[0]] = byDay[parts[0]] || []).push(parseInt(parts[1], 10));
       });
-      line.push(breakdown.totalMinutes > 0 ? formatDuration(breakdown.totalMinutes) : "");
-      aoa.push(line);
+      DAYS.forEach(function (d, dayIdx) {
+        if (!byDay[dayIdx]) return;
+        mergeRanges(byDay[dayIdx]).forEach(function (range) {
+          var s = range[0], e = range[1] + 1;
+          [
+            [s, Math.min(e, REGULAR_START), extra],
+            [Math.max(s, REGULAR_START), Math.min(e, REGULAR_END), regular],
+            [Math.max(s, REGULAR_END), e, extra]
+          ].forEach(function (part) {
+            if (part[1] <= part[0]) return;
+            var cells = [emp, lastFirst, excelDate(adminWeekDates[dayIdx]), excelTime(part[0]), excelTime(part[1])];
+            if (part[2] === regular) cells.push(excelHours(part[1] - part[0]));
+            part[2].push({ emp: String(emp), name: lastFirst, day: dayIdx, cells: cells });
+          });
+        });
+      });
     });
-    return aoa;
+
+    // Group by employee number, then name, then day. Sort is stable, so times stay in order.
+    function byEmployee(a, b) {
+      return a.emp.localeCompare(b.emp, undefined, { numeric: true }) || a.name.localeCompare(b.name) || a.day - b.day;
+    }
+    regular.sort(byEmployee);
+    extra.sort(byEmployee);
+
+    return [["Employee Number", "LastFirst", "Date Worked", "Time In", "Time Out ", "Hours"]]
+      .concat(regular.map(function (l) { return l.cells; }))
+      .concat([[], ["", "Additional Hours worked by employees:"], []])
+      .concat(extra.map(function (l) { return l.cells; }));
+  }
+
+  function cellText(c) {
+    return c && typeof c === "object" ? c.w : c;
   }
 
   function buildAdminTSV(rows) {
-    return buildAdminRows(rows).map(function (line) { return line.join("\t"); }).join("\n");
+    return buildExportRows(rows).map(function (line) { return line.map(cellText).join("\t"); }).join("\n");
   }
 
   document.getElementById("copyAllBtn").addEventListener("click", function () {
@@ -1210,12 +1268,18 @@
       setTimeout(function () { btn.textContent = "Download as Excel (.xlsx)"; }, 1500);
       return;
     }
-    var aoa = buildAdminRows(lastAdminRows);
-    var ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = aoa[0].map(function () { return { wch: 18 }; });
+    var aoa = buildExportRows(lastAdminRows);
+    var ws = XLSX.utils.aoa_to_sheet(aoa.map(function (line) { return line.map(cellText); }));
+    // Swap display text for real Excel dates/times so they sort and add up.
+    aoa.forEach(function (line, R) {
+      line.forEach(function (c, C) {
+        if (c && typeof c === "object") ws[XLSX.utils.encode_cell({ r: R, c: C })] = { t: "n", v: c.v, z: c.z };
+      });
+    });
+    ws["!cols"] = [17.7, 27, 12.7, 12, 12, 14].map(function (w) { return { wch: w }; });
     var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Weekly Hours");
-    XLSX.writeFile(wb, "weekly-hours-" + adminWeekStartISO + ".xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "in");
+    XLSX.writeFile(wb, "Employee Hours " + adminWeekStartISO + ".xlsx");
   });
 
   function showApp() {
@@ -1410,6 +1474,7 @@
           document.getElementById("adminCard").style.display = "block";
           document.getElementById("usersBtn").style.display = "inline-flex";
           loadAllHours();
+          loadUsers(); // export needs employee numbers and last names
         } else {
           document.getElementById("entryArea").style.display = "block";
           loadMyHours();
