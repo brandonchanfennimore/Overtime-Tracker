@@ -308,6 +308,13 @@
     color: var(--accent);
     border: 1px solid var(--border);
   }
+  .week-note {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: -8px 0 14px;
+  }
+  .week-note:empty { display: none; }
   .weeknav {
     display: flex;
     align-items: center;
@@ -528,6 +535,7 @@
 
     <div class="card" id="summary">
       <div class="weeknav" id="myWeekNav"></div>
+      <div class="week-note" id="myWeekNote"></div>
       <div class="summary-name" id="summaryName"></div>
       <div id="summaryBody"></div>
     </div>
@@ -790,6 +798,17 @@
     document.getElementById("saveBtn").disabled = ro;
     document.getElementById("clearBtn").disabled = ro;
     document.getElementById("readOnlyNote").style.display = ro ? "block" : "none";
+
+    // e.g. "Current week · Able to edit hours until Monday 11/23 - 11:59 PM"
+    var notes = [];
+    if (weekStartISO === toISODate(getWeekDates(0)[0])) notes.push("Current week");
+    var deadline = new Date(weekDates[0].getFullYear(), weekDates[0].getMonth(), weekDates[0].getDate() + 8);
+    if (new Date() < new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate() + 1)) {
+      notes.push("Able to edit hours until Monday " + formatDateShort(deadline) + " - 11:59 PM");
+    } else if (!ro) {
+      notes.push("Unlocked by your admin for editing");
+    }
+    document.getElementById("myWeekNote").textContent = notes.join(" \u00b7 ");
   }
 
   function toggleCell(td, dayIdx, slot, on) {
