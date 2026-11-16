@@ -545,6 +545,7 @@
 
     <div class="card" id="adminCard" style="display:none;">
       <div class="weeknav" id="adminWeekNav"></div>
+      <div class="week-note" id="adminWeekNote">Current week</div>
       <div class="topbar">
         <h2>Everyone's hours</h2>
         <div class="btnrow" style="margin-top:0;">
@@ -1202,6 +1203,8 @@
   weekNav(document.getElementById("adminWeekNav"), function (dates) {
     adminWeekDates = dates;
     adminWeekStartISO = toISODate(dates[0]);
+    document.getElementById("adminWeekNote").textContent =
+      adminWeekStartISO === toISODate(getWeekDates(0)[0]) ? "Current week" : "";
     document.getElementById("adminBody").innerHTML = "";
     loadAllHours();
     loadUnlocks();
