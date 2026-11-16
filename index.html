@@ -416,6 +416,40 @@
     margin: -4px 0 8px;
     min-height: 1em;
   }
+  .unlock-box {
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  .unlock-box h3 {
+    font-size: 0.92rem;
+    margin: 0 0 4px;
+  }
+  .unlock-add {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+  }
+  .unlock-add select {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.9rem;
+    min-width: 200px;
+  }
+  .unlock-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
   .admin-person {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -507,6 +541,16 @@
           <button class="secondary" id="copyAllBtn">Copy all as spreadsheet</button>
           <button class="secondary" id="downloadXlsxBtn">Download as Excel (.xlsx)</button>
         </div>
+      </div>
+      <div class="unlock-box" id="unlockBox" style="display:none;">
+        <h3>Allow edits for this week</h3>
+        <p class="empty-note" style="margin:0;">Past weeks are locked. Chosen users can change and save their hours for this week until you lock it again.</p>
+        <div class="unlock-add">
+          <select id="unlockUser" aria-label="User to allow"></select>
+          <button type="button" class="secondary" id="unlockBtn">Allow edits</button>
+        </div>
+        <div id="unlockList"></div>
+        <div class="error-note" id="unlockError"></div>
       </div>
       <div id="adminBody"></div>
     </div>
@@ -730,9 +774,15 @@
   });
 
   // Users can only change the current week.
+  // Users can edit the current week, and last week until Monday 11:59 PM.
+  // An admin can also unlock any past week for a user (week_unlocks table).
   var currentWeekISO = weekStartISO;
+  var myUnlockedWeeks = {}; // week_start -> true
   function isReadOnly() {
-    return weekStartISO !== currentWeekISO;
+    // Checked against the clock each time, so a page left open still locks on time.
+    var editable = [toISODate(getWeekDates(0)[0])];
+    if (new Date().getDay() <= 1) editable.push(toISODate(getWeekDates(1)[0])); // Sunday or Monday
+    return editable.indexOf(weekStartISO) === -1 && !myUnlockedWeeks[weekStartISO];
   }
 
   function applyReadOnly() {
@@ -1132,12 +1182,99 @@
     adminWeekStartISO = toISODate(dates[0]);
     document.getElementById("adminBody").innerHTML = "";
     loadAllHours();
+    loadUnlocks();
+  });
+
+  // ---------------- Admin: unlock past weeks for chosen users ----------------
+
+  var weekUnlocks = []; // user_ids allowed to edit adminWeekStartISO
+
+  function loadUnlocks() {
+    var week = adminWeekStartISO;
+    document.getElementById("unlockError").textContent = "";
+    if (week === currentWeekISO) {
+      weekUnlocks = [];
+      renderUnlocks(); // the current week is always editable
+      return;
+    }
+    sb.from("week_unlocks").select("user_id").eq("week_start", week).then(function (res) {
+      if (week !== adminWeekStartISO) return; // picker moved on while loading
+      if (res.error) {
+        document.getElementById("unlockError").textContent = res.error.message;
+        return;
+      }
+      weekUnlocks = res.data.map(function (u) { return u.user_id; });
+      renderUnlocks();
+    });
+  }
+
+  function renderUnlocks() {
+    document.getElementById("unlockBox").style.display = adminWeekStartISO === currentWeekISO ? "none" : "block";
+
+    var select = document.getElementById("unlockUser");
+    select.innerHTML = "";
+    var choices = users.filter(function (u) { return !u.is_admin && weekUnlocks.indexOf(u.id) === -1; })
+      .sort(function (a, b) { return fullName(a).localeCompare(fullName(b)); });
+    choices.forEach(function (u) {
+      var opt = document.createElement("option");
+      opt.value = u.id;
+      opt.textContent = (fullName(u) || u.email) + (u.employee_id ? " (#" + u.employee_id + ")" : "");
+      select.appendChild(opt);
+    });
+    select.disabled = document.getElementById("unlockBtn").disabled = choices.length === 0;
+
+    var list = document.getElementById("unlockList");
+    list.innerHTML = "";
+    weekUnlocks.forEach(function (id) {
+      var u = users.filter(function (x) { return x.id === id; })[0];
+      var row = document.createElement("div");
+      row.className = "unlock-row";
+      var name = document.createElement("span");
+      name.textContent = (u ? fullName(u) || u.email : "Deleted user") + " can edit this week";
+      var lock = document.createElement("button");
+      lock.type = "button";
+      lock.className = "secondary";
+      lock.textContent = "Lock";
+      lock.addEventListener("click", function () {
+        lock.disabled = true;
+        sb.from("week_unlocks").delete().eq("user_id", id).eq("week_start", adminWeekStartISO)
+          .then(function (res) {
+            if (res.error) {
+              lock.disabled = false;
+              document.getElementById("unlockError").textContent = res.error.message;
+              return;
+            }
+            loadUnlocks();
+          });
+      });
+      row.appendChild(name);
+      row.appendChild(lock);
+      list.appendChild(row);
+    });
+  }
+
+  document.getElementById("unlockBtn").addEventListener("click", function () {
+    var id = document.getElementById("unlockUser").value;
+    if (!id) return;
+    document.getElementById("unlockError").textContent = "";
+    sb.from("week_unlocks").insert({ user_id: id, week_start: adminWeekStartISO }).then(function (res) {
+      if (res.error) {
+        document.getElementById("unlockError").textContent = res.error.message;
+        return;
+      }
+      loadUnlocks();
+    });
   });
 
   function saveMyHours() {
     var saveBtn = document.getElementById("saveBtn");
     var saveError = document.getElementById("saveError");
     saveError.textContent = "";
+    if (isReadOnly()) {
+      applyReadOnly();
+      saveError.textContent = "This week is locked, so your changes weren't saved.";
+      return;
+    }
     var name = currentUserName || "Unnamed";
     var keys = Object.keys(selected).filter(function (k) { return selected[k]; });
 
@@ -1319,6 +1456,7 @@
     return usersApi("GET").then(function (data) {
       users = data;
       renderUsers();
+      renderUnlocks();
     }).catch(function (err) {
       document.getElementById("usersError").textContent = err.message;
     });
@@ -1474,10 +1612,16 @@
           document.getElementById("adminCard").style.display = "block";
           document.getElementById("usersBtn").style.display = "inline-flex";
           loadAllHours();
-          loadUsers(); // export needs employee numbers and last names
+          loadUsers(); // export and week unlocks need the users list
+          loadUnlocks();
         } else {
           document.getElementById("entryArea").style.display = "block";
           loadMyHours();
+          sb.from("week_unlocks").select("week_start").eq("user_id", user.id).then(function (res) {
+            (res.data || []).forEach(function (w) { myUnlockedWeeks[w.week_start] = true; });
+            applyReadOnly();
+            applySelectedToGrid(); // redraw Manual view with the right editability
+          });
         }
       });
   }
