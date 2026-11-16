@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f6f8">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d0f13">
+<meta name="color-scheme" content="light dark">
 <title>Overtime Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -59,15 +62,22 @@
     --danger: oklch(72% 0.17 25);
   }
   * { box-sizing: border-box; }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     line-height: 1.45;
-    padding: 24px 16px 60px;
+    padding:
+      calc(24px + env(safe-area-inset-top, 0px))
+      max(16px, env(safe-area-inset-right, 0px))
+      calc(60px + env(safe-area-inset-bottom, 0px))
+      max(16px, env(safe-area-inset-left, 0px));
     -webkit-font-smoothing: antialiased;
-    -webkit-tap-highlight-color: transparent;
   }
   .wrap {
     max-width: 900px;
@@ -123,6 +133,8 @@
     padding: var(--pad-card);
     width: min(560px, calc(100vw - 32px));
     max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     box-shadow: 0 20px 50px rgb(0 0 0 / 0.25);
   }
   .modal::backdrop {
@@ -210,7 +222,7 @@
     /* Day columns at half the full-window size; the 64px hour column stays fixed. */
     width: calc(50vw + 32px);
     user-select: none;
-    touch-action: none;
+    -webkit-user-select: none;
   }
   th {
     font-size: 0.8rem;
@@ -264,9 +276,7 @@
     cursor: pointer;
     transition: background 0.05s ease;
   }
-  td.cell:hover {
-    background: var(--cell-hover);
-  }
+  td.cell { touch-action: none; }
   td.cell.selected {
     background: var(--cell-selected);
   }
@@ -408,15 +418,30 @@
     background: var(--accent);
     color: var(--on-accent);
   }
-  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
   button.secondary {
     background: transparent;
     color: var(--text);
     border: 1px solid var(--border);
   }
-  button.secondary:hover:not(:disabled),
-  button.icon:hover:not(:disabled),
-  .viewswitch .seg:not(.active):hover { background: var(--cell-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    td.cell:not(.selected):hover { background: var(--cell-hover); }
+    button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+    button.secondary:hover:not(:disabled),
+    button.icon:hover:not(:disabled),
+    .viewswitch .seg:not(.active):hover { background: var(--cell-hover); }
+  }
+  /* Controls: no text selection or callout on long-press */
+  button {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  /* Touch screens: 16px fields so iOS doesn't zoom in, and bigger tap targets */
+  @media (pointer: coarse) {
+    input, select, textarea { font-size: 16px; }
+    button.icon { min-width: 40px; height: 40px; }
+  }
   button:disabled {
     opacity: 0.5;
     cursor: default;
@@ -532,7 +557,13 @@
     margin: 60px auto;
   }
   @media (max-width: 640px) {
-    body { padding: 16px 10px 50px; }
+    body {
+      padding:
+        calc(16px + env(safe-area-inset-top, 0px))
+        max(10px, env(safe-area-inset-right, 0px))
+        calc(50px + env(safe-area-inset-bottom, 0px))
+        max(10px, env(safe-area-inset-left, 0px));
+    }
     h1 { font-size: 1.2rem; }
     :root { --r-card: 12px; --pad-card: 14px; }
     input[type="text"], input[type="email"], input[type="password"] { max-width: 100%; font-size: 1rem; padding: 10px 12px; }
@@ -541,9 +572,27 @@
     th { font-size: 0.72rem; }
     td.hourlabel { font-size: 0.68rem; }
     .summary-day, .summary-total { font-size: 0.88rem; }
-    .manual-range input[type="time"], .unlock-add select { font-size: 16px; }
     .topbar > div:last-child { display: flex; align-items: center; margin-left: auto; }
+    #adminCard .topbar .btnrow { width: 100%; }
+    .unlock-add select { flex: 1; min-width: 0; }
+    /* Day + total on one line, time ranges underneath */
+    .summary-day { flex-wrap: wrap; row-gap: 2px; }
+    .summary-day .ranges { order: 3; flex-basis: 100%; text-align: left; }
+    /* Windows become bottom sheets, entering and leaving through the bottom edge */
+    .modal {
+      width: 100%;
+      max-width: none;
+      max-height: 90dvh;
+      margin: auto 0 0;
+      border-radius: var(--r-card) var(--r-card) 0 0;
+      border-bottom: none;
+      padding-bottom: calc(var(--pad-card) + env(safe-area-inset-bottom, 0px));
+    }
+    .modal[open] { animation: sheet-in 280ms cubic-bezier(0.32, 0.72, 0, 1); }
+    .modal .btnrow { flex-direction: column; }
+    .modal input[type="text"], .modal input[type="email"], .modal input[type="password"] { max-width: 100%; }
   }
+  @keyframes sheet-in { from { transform: translateY(100%); } }
 </style>
 </head>
 <body>
@@ -553,9 +602,9 @@
     <h1>Sign in</h1>
     <p class="sub">Use the email and password your admin gave you.</p>
     <label for="loginEmail">Email</label>
-    <input type="email" id="loginEmail" autocomplete="username">
+    <input type="email" id="loginEmail" autocomplete="username" autocapitalize="none" autocorrect="off" enterkeyhint="next">
     <label for="loginPassword">Password</label>
-    <input type="password" id="loginPassword" autocomplete="current-password">
+    <input type="password" id="loginPassword" autocomplete="current-password" enterkeyhint="go">
     <div class="error-note" id="loginError"></div>
     <button class="primary" id="loginBtn">Sign in</button>
   </div>
@@ -667,7 +716,7 @@
     <label for="newEmployeeId">Employee ID</label>
     <input type="text" id="newEmployeeId" required>
     <label for="newEmail">Email</label>
-    <input type="email" id="newEmail" autocomplete="off" required>
+    <input type="email" id="newEmail" autocomplete="off" autocapitalize="none" autocorrect="off" required>
     <label for="newPassword">Password</label>
     <input type="password" id="newPassword" autocomplete="new-password" minlength="6" required>
     <div class="error-note" id="addUserError"></div>
@@ -1735,6 +1784,13 @@
         return;
       }
       onSignedIn(res.data.user);
+    });
+  });
+
+  // Return / Go on the keyboard signs in.
+  ["loginEmail", "loginPassword"].forEach(function (id) {
+    document.getElementById(id).addEventListener("keydown", function (e) {
+      if (e.key === "Enter") document.getElementById("loginBtn").click();
     });
   });
 
