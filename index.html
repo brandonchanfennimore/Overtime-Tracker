@@ -440,10 +440,12 @@
     flex-wrap: wrap;
   }
   .unlock-add select {
-    padding: 8px 10px;
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 8px 36px 8px 10px;
     border-radius: 8px;
     border: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0ab' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;
     color: var(--text);
     font-size: 0.9rem;
     min-width: 200px;
@@ -781,16 +783,17 @@
     dragMode = null;
   });
 
-  // Users can only change the current week.
   // Users can edit the current week, and last week until Monday 11:59 PM.
   // An admin can also unlock any past week for a user (week_unlocks table).
-  var currentWeekISO = weekStartISO;
   var myUnlockedWeeks = {}; // week_start -> true
-  function isReadOnly() {
-    // Checked against the clock each time, so a page left open still locks on time.
+  // Checked against the clock each time, so a page left open still locks on time.
+  function isWeekLocked(weekISO) {
     var editable = [toISODate(getWeekDates(0)[0])];
     if (new Date().getDay() <= 1) editable.push(toISODate(getWeekDates(1)[0])); // Sunday or Monday
-    return editable.indexOf(weekStartISO) === -1 && !myUnlockedWeeks[weekStartISO];
+    return editable.indexOf(weekISO) === -1;
+  }
+  function isReadOnly() {
+    return isWeekLocked(weekStartISO) && !myUnlockedWeeks[weekStartISO];
   }
 
   function applyReadOnly() {
@@ -1211,9 +1214,9 @@
   function loadUnlocks() {
     var week = adminWeekStartISO;
     document.getElementById("unlockError").textContent = "";
-    if (week === currentWeekISO) {
+    if (!isWeekLocked(week)) {
       weekUnlocks = [];
-      renderUnlocks(); // the current week is always editable
+      renderUnlocks(); // everyone can still edit this week
       return;
     }
     sb.from("week_unlocks").select("user_id").eq("week_start", week).then(function (res) {
@@ -1228,7 +1231,7 @@
   }
 
   function renderUnlocks() {
-    document.getElementById("unlockBox").style.display = adminWeekStartISO === currentWeekISO ? "none" : "block";
+    document.getElementById("unlockBox").style.display = isWeekLocked(adminWeekStartISO) ? "block" : "none";
 
     var select = document.getElementById("unlockUser");
     select.innerHTML = "";
