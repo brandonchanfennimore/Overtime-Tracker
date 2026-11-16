@@ -1,4 +1,4 @@
-// Vercel serverless function: lets admins list, create, and delete users.
+// Vercel serverless function: lets admins list, create, edit, and delete users.
 // Creating or deleting logins needs Supabase's service role key, which must
 // never reach the browser. Set these in Vercel → Project → Settings →
 // Environment Variables:
@@ -28,6 +28,20 @@ async function supabase(path, options = {}) {
   return data;
 }
 
+// Creates or updates a user's profile row. Throws a readable error for a duplicate employee ID.
+async function saveProfile(id, { name, last_name, employee_id }) {
+  try {
+    await supabase("/rest/v1/profiles", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ id, name, last_name: last_name || "", employee_id }),
+    });
+  } catch (err) {
+    if (/employee_id/.test(err.message)) throw new Error("That employee ID is already in use.");
+    throw err;
+  }
+}
+
 // Returns the signed-in user if their profile has is_admin = true, else null.
 async function getAdmin(req) {
   const token = (req.headers.authorization || "").replace(/^Bearer /, "");
@@ -52,37 +66,50 @@ module.exports = async function handler(req, res) {
     if (req.method === "GET") {
       const [auth, profiles] = await Promise.all([
         supabase("/auth/v1/admin/users?per_page=1000"),
-        supabase("/rest/v1/profiles?select=id,name,employee_id,is_admin"),
+        supabase("/rest/v1/profiles?select=id,name,last_name,employee_id,is_admin"),
       ]);
       const profileById = Object.fromEntries(profiles.map((p) => [p.id, p]));
       return res.json(auth.users.map((u) => {
         const p = profileById[u.id] || {};
-        return { id: u.id, email: u.email, name: p.name || "", employee_id: p.employee_id || "", is_admin: !!p.is_admin };
+        return {
+          id: u.id, email: u.email, name: p.name || "", last_name: p.last_name || "",
+          employee_id: p.employee_id || "", is_admin: !!p.is_admin,
+        };
       }));
     }
 
     if (req.method === "POST") {
       const { name, employee_id, email, password } = req.body || {};
       if (!name || !employee_id || !email || !password) {
-        return res.status(400).json({ error: "Name, employee ID, email, and password are all required." });
+        return res.status(400).json({ error: "First name, employee ID, email, and password are all required." });
       }
       const user = await supabase("/auth/v1/admin/users", {
         method: "POST",
         body: JSON.stringify({ email, password, email_confirm: true }),
       });
       try {
-        await supabase("/rest/v1/profiles", {
-          method: "POST",
-          headers: { Prefer: "resolution=merge-duplicates" },
-          body: JSON.stringify({ id: user.id, name, employee_id }),
-        });
+        await saveProfile(user.id, req.body);
       } catch (err) {
         // Don't leave a login behind without a profile (e.g. duplicate employee ID).
         await supabase("/auth/v1/admin/users/" + user.id, { method: "DELETE" });
-        if (/employee_id/.test(err.message)) throw new Error("That employee ID is already in use.");
         throw err;
       }
       return res.status(201).json({ id: user.id });
+    }
+
+    if (req.method === "PATCH") {
+      const { id, name, employee_id, email, password } = req.body || {};
+      if (!id || !name || !employee_id || !email) {
+        return res.status(400).json({ error: "First name, employee ID, and email are required." });
+      }
+      await saveProfile(id, req.body);
+      const authChanges = { email, email_confirm: true };
+      if (password) authChanges.password = password; // blank keeps the current password
+      await supabase("/auth/v1/admin/users/" + encodeURIComponent(id), {
+        method: "PUT",
+        body: JSON.stringify(authChanges),
+      });
+      return res.status(204).end();
     }
 
     if (req.method === "DELETE") {
@@ -93,7 +120,7 @@ module.exports = async function handler(req, res) {
       return res.status(204).end();
     }
 
-    res.setHeader("Allow", "GET, POST, DELETE");
+    res.setHeader("Allow", "GET, POST, PATCH, DELETE");
     return res.status(405).json({ error: "Method not allowed." });
   } catch (err) {
     return res.status(500).json({ error: err.message });

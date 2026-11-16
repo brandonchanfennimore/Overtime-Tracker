@@ -121,7 +121,7 @@
   .modal .sub { margin-bottom: 12px; }
   .users-head, .user-row {
     display: grid;
-    grid-template-columns: 90px 1fr 36px;
+    grid-template-columns: 90px 1fr auto;
     gap: 12px;
     align-items: center;
   }
@@ -153,6 +153,7 @@
     margin-left: 6px;
   }
   button.icon.danger { color: var(--danger); }
+  .row-actions { display: flex; gap: 6px; }
   .topbar .who {
     color: var(--muted);
     font-size: 0.85rem;
@@ -537,9 +538,11 @@
       <h2 id="addUserTitle">Add user</h2>
       <button type="button" class="icon" id="closeAddUserBtn" aria-label="Close">&times;</button>
     </div>
-    <p class="sub">They sign in with this email and password.</p>
-    <label for="newName">Name</label>
+    <p class="sub" id="addUserSub">They sign in with this email and password.</p>
+    <label for="newName">First name</label>
     <input type="text" id="newName" required>
+    <label for="newLastName">Last name</label>
+    <input type="text" id="newLastName">
     <label for="newEmployeeId">Employee ID</label>
     <input type="text" id="newEmployeeId" required>
     <label for="newEmail">Email</label>
@@ -1226,6 +1229,8 @@
   var userSort = { key: "employee_id", dir: 1 };
   var usersModal = document.getElementById("usersModal");
   var addUserModal = document.getElementById("addUserModal");
+  var editingUser = null; // the user being edited, or null when adding
+  var EDIT_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
   var TRASH_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
 
   function usersApi(method, body, query) {
@@ -1255,6 +1260,10 @@
     });
   }
 
+  function fullName(u) {
+    return ((u.name || "") + " " + (u.last_name || "")).trim();
+  }
+
   function renderUsers() {
     document.getElementById("userCount").textContent = users.length + (users.length === 1 ? " user" : " users");
 
@@ -1265,8 +1274,9 @@
       if (active) btn.textContent += userSort.dir === 1 ? " \u25B2" : " \u25BC";
     });
 
+    function sortValue(u) { return userSort.key === "name" ? fullName(u) : String(u.employee_id); }
     var sorted = users.slice().sort(function (a, b) {
-      return String(a[userSort.key]).localeCompare(String(b[userSort.key]), undefined, { numeric: true, sensitivity: "base" }) * userSort.dir;
+      return sortValue(a).localeCompare(sortValue(b), undefined, { numeric: true, sensitivity: "base" }) * userSort.dir;
     });
 
     var list = document.getElementById("usersList");
@@ -1278,7 +1288,7 @@
       emp.textContent = u.employee_id || "\u2014";
       var who = document.createElement("div");
       var name = document.createElement("div");
-      name.textContent = u.name || "Unnamed";
+      name.textContent = fullName(u) || "Unnamed";
       if (u.is_admin) {
         var tag = document.createElement("span");
         tag.className = "tag";
@@ -1294,14 +1304,22 @@
       row.appendChild(who);
 
       var cell = document.createElement("div");
+      cell.className = "row-actions";
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "icon";
+      edit.innerHTML = EDIT_SVG;
+      edit.setAttribute("aria-label", "Edit " + (fullName(u) || u.email));
+      edit.addEventListener("click", function () { openUserForm(u); });
+      cell.appendChild(edit);
       if (u.id !== currentUser.id) {
         var del = document.createElement("button");
         del.type = "button";
         del.className = "icon danger";
         del.innerHTML = TRASH_SVG;
-        del.setAttribute("aria-label", "Delete " + (u.name || u.email));
+        del.setAttribute("aria-label", "Delete " + (fullName(u) || u.email));
         del.addEventListener("click", function () {
-          if (!confirm("Delete " + (u.name || u.email) + "? This removes their login and can't be undone.")) return;
+          if (!confirm("Delete " + (fullName(u) || u.email) + "? This removes their login and can't be undone.")) return;
           del.disabled = true;
           usersApi("DELETE", null, "?id=" + encodeURIComponent(u.id)).then(loadUsers).catch(function (err) {
             del.disabled = false;
@@ -1328,22 +1346,43 @@
     loadUsers();
   });
   document.getElementById("closeUsersBtn").addEventListener("click", function () { usersModal.close(); });
-  document.getElementById("addUserBtn").addEventListener("click", function () {
+  // One form for both adding (user = null) and editing a user.
+  function openUserForm(user) {
+    editingUser = user;
     document.getElementById("addUserForm").reset();
     document.getElementById("addUserError").textContent = "";
+    document.getElementById("addUserTitle").textContent = user ? "Edit user" : "Add user";
+    document.getElementById("addUserSub").textContent = user
+      ? "Leave the password blank to keep their current one."
+      : "They sign in with this email and password.";
+    document.getElementById("createUserBtn").textContent = user ? "Save changes" : "Create user";
+    var password = document.getElementById("newPassword");
+    password.required = !user;
+    password.placeholder = user ? "Unchanged" : "";
+    if (user) {
+      document.getElementById("newName").value = user.name;
+      document.getElementById("newLastName").value = user.last_name;
+      document.getElementById("newEmployeeId").value = user.employee_id;
+      document.getElementById("newEmail").value = user.email;
+    }
     addUserModal.showModal();
-  });
+  }
+
+  document.getElementById("addUserBtn").addEventListener("click", function () { openUserForm(null); });
   document.getElementById("closeAddUserBtn").addEventListener("click", function () { addUserModal.close(); });
 
   document.getElementById("addUserForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var btn = document.getElementById("createUserBtn");
+    var label = btn.textContent;
     var error = document.getElementById("addUserError");
     error.textContent = "";
     btn.disabled = true;
-    btn.textContent = "Creating...";
-    usersApi("POST", {
+    btn.textContent = "Saving...";
+    usersApi(editingUser ? "PATCH" : "POST", {
+      id: editingUser ? editingUser.id : undefined,
       name: document.getElementById("newName").value.trim(),
+      last_name: document.getElementById("newLastName").value.trim(),
       employee_id: document.getElementById("newEmployeeId").value.trim(),
       email: document.getElementById("newEmail").value.trim(),
       password: document.getElementById("newPassword").value
@@ -1354,7 +1393,7 @@
       error.textContent = err.message;
     }).then(function () {
       btn.disabled = false;
-      btn.textContent = "Create user";
+      btn.textContent = label;
     });
   });
 
@@ -1362,10 +1401,10 @@
     currentUser = user;
     showApp();
 
-    sb.from("profiles").select("is_admin, name").eq("id", user.id).maybeSingle()
+    sb.from("profiles").select("*").eq("id", user.id).maybeSingle()
       .then(function (res) {
         isAdmin = !!(res.data && res.data.is_admin);
-        currentUserName = (res.data && res.data.name) || user.email;
+        currentUserName = (res.data && fullName(res.data)) || user.email;
         document.getElementById("whoLabel").textContent = currentUserName;
         if (isAdmin) {
           document.getElementById("adminCard").style.display = "block";
