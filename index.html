@@ -1235,8 +1235,9 @@
   document.getElementById("saveBtn").addEventListener("click", saveMyHours);
 
   // ---------------- Admin export (matches the "Employee Hours.xlsx" layout) ----------------
-  // Time inside 9 AM - 5 PM goes in the main list with an Hours column; time
-  // outside it goes under "Additional Hours worked by employees:".
+  // Weekday time inside 9 AM - 5 PM goes in the main list with an Hours column.
+  // Time outside it, and all weekend time (Sun/Sat), goes under
+  // "Additional Hours worked by employees:".
 
   var REGULAR_START = 9 * SLOTS_PER_HOUR;
   var REGULAR_END = 17 * SLOTS_PER_HOUR;
@@ -1258,7 +1259,8 @@
     return m ? h + " Hrs " + m + " Min" : h;
   }
 
-  function buildExportRows(rows) {
+  // Splits everyone's hours into regular and additional lines, sorted by employee.
+  function splitExportLines(rows) {
     var userById = {};
     users.forEach(function (u) { userById[u.id] = u; });
     var regular = [], extra = [];
@@ -1273,17 +1275,18 @@
       var byDay = storedToMinutes(row.selections);
       DAYS.forEach(function (d, dayIdx) {
         if (!byDay[dayIdx].length) return;
+        var weekend = dayIdx === 0 || dayIdx === 6;
         mergeRanges(byDay[dayIdx]).forEach(function (range) {
           var s = range[0], e = range[1] + 1;
-          [
+          (weekend ? [[s, e, extra]] : [
             [s, Math.min(e, REGULAR_START), extra],
             [Math.max(s, REGULAR_START), Math.min(e, REGULAR_END), regular],
             [Math.max(s, REGULAR_END), e, extra]
-          ].forEach(function (part) {
+          ]).forEach(function (part) {
             if (part[1] <= part[0]) return;
             var cells = [emp, lastFirst, excelDate(adminWeekDates[dayIdx]), excelTime(part[0]), excelTime(part[1])];
             if (part[2] === regular) cells.push(excelHours(part[1] - part[0]));
-            part[2].push({ emp: String(emp), name: lastFirst, day: dayIdx, cells: cells });
+            part[2].push({ emp: String(emp), name: lastFirst, day: dayIdx, minutes: part[1] - part[0], cells: cells });
           });
         });
       });
@@ -1295,19 +1298,32 @@
     }
     regular.sort(byEmployee);
     extra.sort(byEmployee);
+    return { regular: regular, extra: extra };
+  }
 
+  // Excel download: the full "Employee Hours.xlsx" layout.
+  function buildExportRows(rows) {
+    var lines = splitExportLines(rows);
     return [["Employee Number", "LastFirst", "Date Worked", "Time In", "Time Out ", "Hours"]]
-      .concat(regular.map(function (l) { return l.cells; }))
+      .concat(lines.regular.map(function (l) { return l.cells; }))
       .concat([[], ["", "Additional Hours worked by employees:"], []])
-      .concat(extra.map(function (l) { return l.cells; }));
+      .concat(lines.extra.map(function (l) { return l.cells; }));
   }
 
   function cellText(c) {
     return c && typeof c === "object" ? c.w : c;
   }
 
+  // Copy: just name, date, in, out, hours, with only the additional-hours title.
   function buildAdminTSV(rows) {
-    return buildExportRows(rows).map(function (line) { return line.map(cellText).join("\t"); }).join("\n");
+    var lines = splitExportLines(rows);
+    function copyLine(l) {
+      return [l.name, cellText(l.cells[2]), cellText(l.cells[3]), cellText(l.cells[4]), excelHours(l.minutes)].join("\t");
+    }
+    return lines.regular.map(copyLine)
+      .concat(["Additional Hours worked by employees:"])
+      .concat(lines.extra.map(copyLine))
+      .join("\n");
   }
 
   document.getElementById("copyAllBtn").addEventListener("click", function () {
