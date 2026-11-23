@@ -22,9 +22,7 @@
     --muted: oklch(50% 0.02 265);
     --accent: oklch(51% 0.23 277);
     --on-accent: oklch(100% 0 0);
-    --cell-empty: var(--card);
     --cell-hover: oklch(95% 0.03 277);
-    --cell-selected: var(--accent);
     --danger: oklch(55% 0.21 27);
     --r-card: 14px;
     --pad-card: 18px;
@@ -41,9 +39,7 @@
       --muted: oklch(74% 0.015 265);
       --accent: oklch(72% 0.15 277);
       --on-accent: oklch(18% 0.03 277);
-      --cell-empty: var(--card);
       --cell-hover: oklch(30% 0.05 277);
-      --cell-selected: var(--accent);
       --danger: oklch(72% 0.17 25);
     }
   }
@@ -56,9 +52,7 @@
     --muted: oklch(74% 0.015 265);
     --accent: oklch(72% 0.15 277);
     --on-accent: oklch(18% 0.03 277);
-    --cell-empty: var(--card);
     --cell-hover: oklch(30% 0.05 277);
-    --cell-selected: var(--accent);
     --danger: oklch(72% 0.17 25);
   }
   * { box-sizing: border-box; }
@@ -211,77 +205,11 @@
     font-size: 0.95rem;
     margin-bottom: 12px;
   }
-  /* Week card shrinks to wrap the grid. */
+  /* Week card shrinks to wrap the day list. */
   .card.week {
     width: fit-content;
     margin-left: auto;
     margin-right: auto;
-  }
-  table {
-    border-collapse: collapse;
-    /* Day columns at half the full-window size; the 64px hour column stays fixed. */
-    width: calc(50vw + 32px);
-    user-select: none;
-    -webkit-user-select: none;
-  }
-  th {
-    font-size: 0.8rem;
-    color: var(--muted);
-    font-weight: 600;
-    padding: 6px 4px;
-    text-align: center;
-  }
-  th .date-sub {
-    font-size: 0.7rem;
-    font-weight: 400;
-    color: var(--muted);
-    opacity: 0.8;
-  }
-  th.hourcol {
-    width: 64px;
-  }
-  thead th {
-    position: sticky;
-    top: 0;
-    background: var(--card);
-    z-index: 3;
-  }
-  th.hourcol {
-    position: sticky;
-    left: 0;
-    top: 0;
-    z-index: 4;
-    background: var(--card);
-  }
-  td.hourlabel {
-    font-size: 0.72rem;
-    color: var(--muted);
-    text-align: right;
-    padding-right: 8px;
-    white-space: nowrap;
-    line-height: 0;
-    border: none;
-    position: sticky;
-    left: 0;
-    background: var(--card);
-    z-index: 2;
-  }
-  td.cell {
-    /* All 24 hours (96 rows) fit in one screen height, minus the header row. */
-    height: max(5px, calc((100dvh - 72px) / 96));
-    background: var(--cell-empty);
-    border: 1px solid var(--border);
-    border-top: none;
-    border-bottom: none;
-    cursor: pointer;
-    transition: background 0.05s ease;
-  }
-  td.cell { touch-action: none; }
-  td.cell.selected {
-    background: var(--cell-selected);
-  }
-  tr.hour-boundary td.cell {
-    border-top: 1px solid var(--border);
   }
   .viewswitch {
     display: flex;
@@ -290,28 +218,6 @@
     margin-bottom: 12px;
     font-size: 0.85rem;
     color: var(--muted);
-  }
-  .segmented {
-    display: inline-flex;
-    --seg-r: 10px;
-    --seg-pad: 3px;
-    padding: var(--seg-pad);
-    gap: 2px;
-    border-radius: var(--seg-r);
-    background: var(--bg);
-    border: 1px solid var(--border);
-  }
-  .viewswitch .seg {
-    padding: 5px 14px;
-    font-size: 0.85rem;
-    border-radius: calc(var(--seg-r) - var(--seg-pad));
-    background: transparent;
-    color: var(--muted);
-  }
-  .viewswitch .seg.active {
-    background: var(--surface-raised);
-    color: var(--text);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px var(--border);
   }
   .entry-week {
     margin-left: auto;
@@ -377,21 +283,6 @@
     margin-bottom: 14px;
     font-weight: 600;
   }
-  .legend {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-top: 12px;
-  }
-  .swatch {
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
-    border: 1px solid var(--border);
-  }
-  .swatch.on { background: var(--cell-selected); }
   .btnrow {
     display: flex;
     gap: 10px;
@@ -425,11 +316,9 @@
     border: 1px solid var(--border);
   }
   @media (hover: hover) and (pointer: fine) {
-    td.cell:not(.selected):hover { background: var(--cell-hover); }
     button.primary:hover:not(:disabled) { filter: brightness(1.08); }
     button.secondary:hover:not(:disabled),
-    button.icon:hover:not(:disabled),
-    .viewswitch .seg:not(.active):hover { background: var(--cell-hover); }
+    button.icon:hover:not(:disabled) { background: var(--cell-hover); }
   }
   /* Controls: no text selection or callout on long-press */
   button {
@@ -569,8 +458,6 @@
     input[type="text"], input[type="email"], input[type="password"] { max-width: 100%; font-size: 1rem; padding: 10px 12px; }
     .btnrow { flex-direction: column; }
     .btnrow button { width: 100%; padding: 12px; font-size: 1rem; }
-    th { font-size: 0.72rem; }
-    td.hourlabel { font-size: 0.68rem; }
     .summary-day, .summary-total { font-size: 0.88rem; }
     .topbar > div:last-child { display: flex; align-items: center; margin-left: auto; }
     #adminCard .topbar .btnrow { width: 100%; }
@@ -625,23 +512,13 @@
     </div>
     <!-- Hour entry for regular users. Admins only see the admin card. -->
     <div id="entryArea" style="display:none;">
-    <p class="sub">Add the times you worked with +, or switch to Schedule and click or drag across the hours. Hit Save when you're done.</p>
+    <p class="sub">Add the times you worked with +, down to the minute. Hit Save when you're done.</p>
 
     <div class="card week">
       <div class="viewswitch">
-        <div class="segmented" role="group" aria-label="View">
-          <button type="button" class="seg active" data-view="manual" aria-pressed="true">Manual</button>
-          <button type="button" class="seg" data-view="schedule" aria-pressed="false">Schedule</button>
-        </div>
         <span class="entry-week" id="entryWeekLabel"></span>
       </div>
-      <div id="manualView" style="display:none;"></div>
-      <div class="grid-scroll">
-        <table id="grid"></table>
-      </div>
-      <div class="legend">
-        <span class="swatch on"></span> Marked as worked
-      </div>
+      <div id="manualView"></div>
       <p class="empty-note" id="readOnlyNote" style="display:none;">Past weeks are view-only.</p>
       <div class="error-note" id="saveError"></div>
       <div class="btnrow">
@@ -737,7 +614,7 @@
   var DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   var START_HOUR = 0;   // midnight
   var END_HOUR = 24;    // up to midnight
-  var SLOTS_PER_HOUR = 4; // 15-minute increments
+  var SLOTS_PER_HOUR = 60; // 1-minute increments: a "slot" is one minute
   var slots = [];
   for (var s = START_HOUR * SLOTS_PER_HOUR; s < END_HOUR * SLOTS_PER_HOUR; s++) slots.push(s);
 
@@ -803,104 +680,54 @@
     var ampm = hh < 12 ? "AM" : "PM";
     var display = hh % 12;
     if (display === 0) display = 12;
-    var mmStr = mm === 0 ? "00" : String(mm);
+    var mmStr = String(mm).padStart(2, "0");
     return display + ":" + mmStr + " " + ampm;
   }
 
-  var grid = document.getElementById("grid");
-  var thead = document.createElement("thead");
-  var headRow = document.createElement("tr");
-  var corner = document.createElement("th");
-  corner.className = "hourcol";
-  headRow.appendChild(corner);
-  var dayHeaders = DAYS.map(function () {
-    var th = document.createElement("th");
-    headRow.appendChild(th);
-    return th;
-  });
-  function renderGridHeader() {
-    dayHeaders.forEach(function (th, idx) {
-      th.innerHTML = DAYS[idx] + '<br><span class="date-sub">' + formatDateShort(weekDates[idx]) + '</span>';
-    });
+  function renderEntryWeek() {
     // Shows which week the entry card is editing.
     document.getElementById("entryWeekLabel").textContent =
       formatDateShort(weekDates[0]) + " - " + formatDateShort(weekDates[6]);
   }
-  renderGridHeader();
-  thead.appendChild(headRow);
-  grid.appendChild(thead);
+  renderEntryWeek();
 
-  var tbody = document.createElement("tbody");
-  var selected = {}; // key "dayIndex-slot" -> true
+  var selected = {}; // key "dayIndex-minute" -> true
 
   function cellKey(dayIdx, slot) { return dayIdx + "-" + slot; }
 
-  var isMouseDown = false;
-  var dragMode = null;
-
-  slots.forEach(function (slot) {
-    var isHourStart = slot % SLOTS_PER_HOUR === 0;
-    var tr = document.createElement("tr");
-    if (isHourStart) tr.className = "hour-boundary";
-
-    var labelTd = document.createElement("td");
-    labelTd.className = "hourlabel";
-    labelTd.textContent = isHourStart ? formatSlot(slot) : "";
-    tr.appendChild(labelTd);
-
-    DAYS.forEach(function (day, dayIdx) {
-      var td = document.createElement("td");
-      td.className = "cell";
-      td.dataset.day = dayIdx;
-      td.dataset.slot = slot;
-
-      td.addEventListener("mousedown", function (e) {
-        e.preventDefault();
-        isMouseDown = true;
-        var key = cellKey(dayIdx, slot);
-        dragMode = !selected[key];
-        toggleCell(td, dayIdx, slot, dragMode);
-      });
-      td.addEventListener("mouseenter", function () {
-        if (isMouseDown) {
-          toggleCell(td, dayIdx, slot, dragMode);
-        }
-      });
-      td.addEventListener("touchstart", function (e) {
-        e.preventDefault();
-        isMouseDown = true;
-        var key = cellKey(dayIdx, slot);
-        dragMode = !selected[key];
-        toggleCell(td, dayIdx, slot, dragMode);
-      }, { passive: false });
-
-      tr.appendChild(td);
+  // Saved as "day:startMinute-endMinute" ranges (end exclusive). Older saves used
+  // "day-slot" keys in 15-minute slots; both read back as minutes per day.
+  function storedToMinutes(keys) {
+    var byDay = {};
+    DAYS.forEach(function (d, i) { byDay[i] = []; });
+    (keys || []).forEach(function (key) {
+      key = String(key);
+      var m = key.match(/^(\d+):(\d+)-(\d+)$/);
+      var day, start, end;
+      if (m) {
+        day = +m[1]; start = +m[2]; end = +m[3];
+      } else {
+        var parts = key.split("-");
+        day = +parts[0]; start = +parts[1] * 15; end = start + 15;
+      }
+      for (var t = start; t < end; t++) if (byDay[day]) byDay[day].push(t);
     });
-    tbody.appendChild(tr);
-  });
-  grid.appendChild(tbody);
+    return byDay;
+  }
 
-  document.addEventListener("mouseup", function () {
-    isMouseDown = false;
-    dragMode = null;
-  });
-
-  grid.addEventListener("touchmove", function (e) {
-    if (!isMouseDown) return;
-    e.preventDefault();
-    var touch = e.touches[0];
-    var el = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (el && el.classList && el.classList.contains("cell")) {
-      var dayIdx = parseInt(el.dataset.day, 10);
-      var slot = parseInt(el.dataset.slot, 10);
-      toggleCell(el, dayIdx, slot, dragMode);
-    }
-  }, { passive: false });
-
-  document.addEventListener("touchend", function () {
-    isMouseDown = false;
-    dragMode = null;
-  });
+  function selectedToStored() {
+    var byDay = {};
+    Object.keys(selected).forEach(function (key) {
+      if (!selected[key]) return;
+      var parts = key.split("-");
+      (byDay[parts[0]] = byDay[parts[0]] || []).push(+parts[1]);
+    });
+    var keys = [];
+    Object.keys(byDay).forEach(function (day) {
+      mergeRanges(byDay[day]).forEach(function (r) { keys.push(day + ":" + r[0] + "-" + (r[1] + 1)); });
+    });
+    return keys;
+  }
 
   // Users can edit the current week, and last week until Monday 11:59 PM.
   // An admin can also unlock any past week for a user (week_unlocks table).
@@ -933,24 +760,7 @@
     document.getElementById("myWeekNote").textContent = notes.join(" \u00b7 ");
   }
 
-  function toggleCell(td, dayIdx, slot, on) {
-    if (isReadOnly()) return;
-    var key = cellKey(dayIdx, slot);
-    selected[key] = on;
-    td.classList.toggle("selected", on);
-    updateSummary();
-  }
-
-  function applySelectedToGrid() {
-    document.querySelectorAll("td.cell").forEach(function (td) {
-      var key = cellKey(td.dataset.day, td.dataset.slot);
-      td.classList.toggle("selected", !!selected[key]);
-    });
-    renderManual();
-  }
-
-  // ---------------- Manual view ----------------
-  // Edits the same `selected` map as the grid, so both views stay in sync.
+  // ---------------- Manual entry ----------------
 
   var manualView = document.getElementById("manualView");
   var pendingRows = {}; // dayIdx -> number of blank ranges added with "+"
@@ -962,7 +772,7 @@
 
   function timeToSlot(value) {
     var parts = value.split(":");
-    return Math.round((parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)) / (60 / SLOTS_PER_HOUR));
+    return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
   }
 
   function setRange(dayIdx, start, end, on) {
@@ -970,7 +780,7 @@
   }
 
   function changed() {
-    applySelectedToGrid();
+    renderManual();
     updateSummary();
   }
 
@@ -1070,25 +880,9 @@
     });
   }
 
-  document.querySelectorAll(".viewswitch .seg").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var manual = btn.dataset.view === "manual";
-      document.querySelectorAll(".viewswitch .seg").forEach(function (b) {
-        var on = b === btn;
-        b.classList.toggle("active", on);
-        b.setAttribute("aria-pressed", on);
-      });
-      manualView.style.display = manual ? "block" : "none";
-      document.querySelector(".grid-scroll").style.display = manual ? "none" : "block";
-      document.querySelector(".legend").style.display = manual ? "none" : "flex";
-      if (manual) renderManual();
-    });
-  });
-  document.querySelector('.viewswitch .seg[data-view="manual"]').click(); // Manual is the default view
-
   document.getElementById("clearBtn").addEventListener("click", function () {
     selected = {};
-    applySelectedToGrid();
+    renderManual();
     updateSummary();
   });
 
@@ -1195,14 +989,7 @@
   var lastAdminRows = [];
 
   function dayBreakdown(selectionKeys) {
-    var byDay = {};
-    DAYS.forEach(function (d, i) { byDay[i] = []; });
-    (selectionKeys || []).forEach(function (key) {
-      var parts = String(key).split("-");
-      var dIdx = parseInt(parts[0], 10);
-      var slot = parseInt(parts[1], 10);
-      if (byDay[dIdx]) byDay[dIdx].push(slot);
-    });
+    var byDay = storedToMinutes(selectionKeys);
     var perDay = DAYS.map(function (d, i) {
       var hrs = byDay[i];
       if (hrs.length === 0) return { rangeText: "", minutes: 0 };
@@ -1300,8 +1087,11 @@
         if (week !== weekStartISO) return; // picker moved on while loading
         if (res.error) { console.error(res.error); return; }
         selected = {};
-        ((res.data && res.data.selections) || []).forEach(function (k) { selected[k] = true; });
-        applySelectedToGrid();
+        var byDay = storedToMinutes(res.data && res.data.selections);
+        Object.keys(byDay).forEach(function (day) {
+          byDay[day].forEach(function (t) { selected[cellKey(day, t)] = true; });
+        });
+        renderManual();
         updateSummary();
       });
   }
@@ -1311,9 +1101,9 @@
     weekStartISO = toISODate(dates[0]);
     selected = {};
     pendingRows = {};
-    renderGridHeader();
+    renderEntryWeek();
     applyReadOnly();
-    applySelectedToGrid();
+    renderManual();
     updateSummary();
     loadMyHours();
   });
@@ -1419,7 +1209,7 @@
       return;
     }
     var name = currentUserName || "Unnamed";
-    var keys = Object.keys(selected).filter(function (k) { return selected[k]; });
+    var keys = selectedToStored();
 
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving...";
@@ -1480,13 +1270,9 @@
       var lastFirst = u ? (u.last_name ? u.last_name + ", " + u.name : u.name) : row.name;
       lastFirst = lastFirst || "Unnamed";
 
-      var byDay = {};
-      (row.selections || []).forEach(function (key) {
-        var parts = String(key).split("-");
-        (byDay[parts[0]] = byDay[parts[0]] || []).push(parseInt(parts[1], 10));
-      });
+      var byDay = storedToMinutes(row.selections);
       DAYS.forEach(function (d, dayIdx) {
-        if (!byDay[dayIdx]) return;
+        if (!byDay[dayIdx].length) return;
         mergeRanges(byDay[dayIdx]).forEach(function (range) {
           var s = range[0], e = range[1] + 1;
           [
@@ -1763,7 +1549,7 @@
           sb.from("week_unlocks").select("week_start").eq("user_id", user.id).then(function (res) {
             (res.data || []).forEach(function (w) { myUnlockedWeeks[w.week_start] = true; });
             applyReadOnly();
-            applySelectedToGrid(); // redraw Manual view with the right editability
+            renderManual(); // redraw with the right editability
           });
         }
       });
